@@ -1,6 +1,13 @@
 
 import { Task, DailyProgress, StreakData, TaskTag, UserProfile } from "@/types/task";
 
+// Format seconds to MM:SS display format
+export const formatTime = (seconds: number): string => {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+};
+
 // Save tasks to localStorage
 export const saveTasks = (tasks: Task[]) => {
   localStorage.setItem("tasks", JSON.stringify(tasks));

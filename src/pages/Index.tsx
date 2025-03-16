@@ -4,7 +4,7 @@ import TaskForm from "@/components/TaskForm";
 import TaskList from "@/components/TaskList";
 import Calendar from "@/components/Calendar";
 import UserProfile from "@/components/UserProfile";
-import { Task, DailyProgress, StreakData, TaskTag, UserProfile as UserProfileType } from "@/types/task";
+import { Task, DailyProgress, StreakData, TaskTag, UserProfile as UserProfileType, TaskStatus } from "@/types/task";
 import {
   loadTasks,
   saveTasks,
@@ -148,7 +148,7 @@ const Index = () => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
-    const newStatus = task.status === "completed" ? "pending" : "completed";
+    const newStatus: TaskStatus = task.status === "completed" ? "pending" : "completed";
     const updatedTasks = tasks.map(t =>
       t.id === taskId
         ? {

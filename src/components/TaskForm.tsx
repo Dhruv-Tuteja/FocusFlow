@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon, X, Plus, Tag } from "lucide-react";
@@ -46,10 +45,8 @@ const TaskForm: React.FC<TaskFormProps> = ({ onAddTask, availableTags }) => {
       description: description.trim() || undefined,
       dueDate: format(dueDate, "yyyy-MM-dd"),
       estimatedMinutes: estimatedMinutes || undefined,
-      timeSpent: 0,
       status: "pending",
       tags: [...selectedTags],
-      isTimerActive: false,
     };
     
     onAddTask(newTask);
