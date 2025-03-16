@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect } from "react";
 import TaskForm from "@/components/TaskForm";
 import TaskList from "@/components/TaskList";
 import Calendar from "@/components/Calendar";
 import UserProfile from "@/components/UserProfile";
-import { Task, DailyProgress, StreakData, TaskTag, UserProfile as UserProfileType, TaskStatus } from "@/types/task";
+import BookmarkManager from "@/components/BookmarkManager";
+import { Task, DailyProgress, StreakData, TaskTag, UserProfile as UserProfileType, TaskStatus, Bookmark } from "@/types/task";
 import {
   loadTasks,
   saveTasks,
@@ -18,6 +18,8 @@ import {
   saveProfiles,
   loadUserProfile,
   saveUserProfile,
+  loadBookmarks,
+  saveBookmarks,
   generateId,
   getTodayDateString,
   updateStreak,
@@ -41,6 +43,7 @@ const Index = () => {
   const [currentUser, setCurrentUser] = useState<UserProfileType | null>(null);
   const [darkMode, setDarkMode] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const { toast } = useToast();
 
   // Apply dark mode class
@@ -60,12 +63,14 @@ const Index = () => {
     const storedTags = loadTags();
     const storedProfiles = loadProfiles();
     const storedUser = loadUserProfile();
+    const storedBookmarks = loadBookmarks();
 
     setTasks(storedTasks);
     setProgress(storedProgress);
     setStreak(storedStreak);
     setTags(storedTags);
     setProfiles(storedProfiles);
+    setBookmarks(storedBookmarks);
     
     if (storedUser) {
       setCurrentUser(storedUser);
@@ -92,7 +97,6 @@ const Index = () => {
     const completedTasks = todayTasks.filter(task => task.status === "completed");
     const completion = todayTasks.length > 0 ? completedTasks.length / todayTasks.length : 0;
 
-    // Check if we already have progress for today
     const existingProgress = progress.find(p => p.date === today);
     let updatedProgress: DailyProgress[];
 
@@ -124,7 +128,6 @@ const Index = () => {
     setProgress(updatedProgress);
     saveProgress(updatedProgress);
 
-    // Update streak
     const updatedStreak = updateStreak(updatedProgress, streak);
     setStreak(updatedStreak);
     saveStreak(updatedStreak);
@@ -155,7 +158,6 @@ const Index = () => {
 
     const newStatus: TaskStatus = task.status === "completed" ? "pending" : "completed";
     
-    // Update this specific task
     let updatedTasks = tasks.map(t =>
       t.id === taskId
         ? {
@@ -165,7 +167,6 @@ const Index = () => {
         : t
     );
     
-    // If task is being marked as completed and it's recurring, generate the next occurrence
     if (newStatus === "completed" && task.recurrence && task.recurrence.pattern !== "once") {
       updatedTasks = updateRecurringTask(task, updatedTasks);
     }
@@ -239,7 +240,6 @@ const Index = () => {
       setCurrentUser(updatedUser);
       saveUserProfile(updatedUser);
       
-      // Also update in profiles array
       const updatedProfiles = profiles.map(p => 
         p.id === currentUser.id ? updatedUser : p
       );
@@ -256,6 +256,24 @@ const Index = () => {
     setSelectedDate(null);
   };
 
+  const handleAddBookmark = (bookmark: Bookmark) => {
+    const updatedBookmarks = [...bookmarks, bookmark];
+    setBookmarks(updatedBookmarks);
+    saveBookmarks(updatedBookmarks);
+  };
+
+  const handleDeleteBookmark = (bookmarkId: string) => {
+    const updatedBookmarks = bookmarks.filter(b => b.id !== bookmarkId);
+    setBookmarks(updatedBookmarks);
+    saveBookmarks(updatedBookmarks);
+    
+    toast({
+      title: "Bookmark deleted",
+      description: "The bookmark has been removed.",
+      variant: "destructive",
+    });
+  };
+
   const todayString = getTodayDateString();
   const todayTasks = tasks.filter(task => 
     task.dueDate === todayString || 
@@ -267,94 +285,114 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <div className="container px-4 py-8 max-w-6xl">
-        <UserProfile 
-          currentUser={currentUser}
-          profiles={profiles}
-          darkMode={darkMode}
-          onLogin={handleLogin}
-          onLogout={handleLogout}
-          onCreateProfile={handleCreateProfile}
-          onToggleDarkMode={handleToggleDarkMode}
-        />
+        <div className="flex items-start gap-8">
+          <div className="w-64 hidden md:block">
+            <BookmarkManager 
+              bookmarks={bookmarks}
+              onAddBookmark={handleAddBookmark}
+              onDeleteBookmark={handleDeleteBookmark}
+            />
+          </div>
+          
+          <div className="flex-1">
+            <UserProfile 
+              currentUser={currentUser}
+              profiles={profiles}
+              darkMode={darkMode}
+              onLogin={handleLogin}
+              onLogout={handleLogout}
+              onCreateProfile={handleCreateProfile}
+              onToggleDarkMode={handleToggleDarkMode}
+            />
 
-        <header className="text-center mb-12 animate-fade-in">
-          <h1 className="text-4xl font-bold mb-2">Focus Flow</h1>
-          {selectedDate ? (
-            <div>
-              <p className="text-muted-foreground">
-                Viewing tasks for {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-              </p>
-              <button 
-                className="text-primary text-sm mt-2"
-                onClick={handleBackToToday}
-              >
-                Back to today
-              </button>
-            </div>
-          ) : (
-            <p className="text-muted-foreground">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            </p>
-          )}
-        </header>
+            <header className="text-center mb-12 animate-fade-in">
+              {selectedDate ? (
+                <div>
+                  <p className="text-muted-foreground">
+                    Viewing tasks for {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                  </p>
+                  <button 
+                    className="text-primary text-sm mt-2"
+                    onClick={handleBackToToday}
+                  >
+                    Back to today
+                  </button>
+                </div>
+              ) : (
+                <p className="text-muted-foreground">
+                  {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                </p>
+              )}
+            </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* Task list column */}
-          <div className="col-span-1 md:col-span-2 space-y-6">
-            {todayTasks.length > 0 && !selectedDate && (
-              <Card className="animate-scale-in">
-                <CardHeader className="pb-2">
-                  <div className="flex justify-between items-center">
-                    <CardTitle className="text-lg font-medium">Today's Progress</CardTitle>
-                    <div className="flex items-center gap-1">
-                      <span className="font-semibold">{Math.round(todayProgress)}%</span>
-                      <span className="text-sm text-muted-foreground">complete</span>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="bg-muted/50 rounded-full h-2 mb-1">
-                    <div 
-                      className="bg-primary rounded-full h-2 transition-all duration-700 ease-out"
-                      style={{ width: `${todayProgress}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <div>
-                      {todayCompleted} of {todayTasks.length} tasks completed
-                    </div>
-                    {todayCompleted === todayTasks.length && todayTasks.length > 0 && (
-                      <div className="flex items-center gap-1 text-primary">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        <span>All done for today!</span>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {/* Task list column */}
+              <div className="col-span-1 md:col-span-2 space-y-6">
+                {todayTasks.length > 0 && !selectedDate && (
+                  <Card className="animate-scale-in">
+                    <CardHeader className="pb-2">
+                      <div className="flex justify-between items-center">
+                        <CardTitle className="text-lg font-medium">Today's Progress</CardTitle>
+                        <div className="flex items-center gap-1">
+                          <span className="font-semibold">{Math.round(todayProgress)}%</span>
+                          <span className="text-sm text-muted-foreground">complete</span>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                    </CardHeader>
+                    <CardContent>
+                      <div className="bg-muted/50 rounded-full h-2 mb-1">
+                        <div 
+                          className="bg-primary rounded-full h-2 transition-all duration-700 ease-out"
+                          style={{ width: `${todayProgress}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <div>
+                          {todayCompleted} of {todayTasks.length} tasks completed
+                        </div>
+                        {todayCompleted === todayTasks.length && todayTasks.length > 0 && (
+                          <div className="flex items-center gap-1 text-primary">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            <span>All done for today!</span>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
-            {!selectedDate && (
-              <TaskForm onAddTask={handleAddTask} availableTags={tags} />
-            )}
-            
-            <TaskList
-              tasks={tasks}
-              selectedDate={selectedDate || undefined}
-              onUpdateTask={handleUpdateTask}
-              onCompleteTask={handleCompleteTask}
-              onDeleteTask={handleDeleteTask}
-            />
-          </div>
+                {!selectedDate && (
+                  <TaskForm onAddTask={handleAddTask} availableTags={tags} />
+                )}
+                
+                <TaskList
+                  tasks={tasks}
+                  selectedDate={selectedDate || undefined}
+                  onUpdateTask={handleUpdateTask}
+                  onCompleteTask={handleCompleteTask}
+                  onDeleteTask={handleDeleteTask}
+                />
+              </div>
 
-          {/* Calendar and stats column */}
-          <div className="space-y-6">
-            <Calendar 
-              progress={progress} 
-              streak={streak} 
-              onDateSelect={handleDateSelect}
-            />
+              {/* Calendar and stats column */}
+              <div className="space-y-6">
+                <Calendar 
+                  progress={progress} 
+                  streak={streak} 
+                  onDateSelect={handleDateSelect}
+                />
+              </div>
+            </div>
           </div>
+        </div>
+        
+        {/* Mobile bookmarks */}
+        <div className="block md:hidden mt-8">
+          <BookmarkManager 
+            bookmarks={bookmarks}
+            onAddBookmark={handleAddBookmark}
+            onDeleteBookmark={handleDeleteBookmark}
+          />
         </div>
       </div>
     </div>

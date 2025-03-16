@@ -1,5 +1,36 @@
-import { Task, DailyProgress, StreakData, TaskTag, UserProfile, WeekDay, RecurrencePattern } from "@/types/task";
+import { Task, DailyProgress, StreakData, TaskTag, UserProfile, WeekDay, RecurrencePattern, Bookmark } from "@/types/task";
 import { addDays, addWeeks, addMonths, format, parseISO, isAfter, isSameDay, getDay } from "date-fns";
+
+// Save bookmarks to localStorage
+export const saveBookmarks = (bookmarks: Bookmark[]) => {
+  localStorage.setItem("bookmarks", JSON.stringify(bookmarks));
+};
+
+// Load bookmarks from localStorage
+export const loadBookmarks = (): Bookmark[] => {
+  const bookmarks = localStorage.getItem("bookmarks");
+  return bookmarks ? JSON.parse(bookmarks) : [];
+};
+
+// Extract domain from URL
+export const extractDomain = (url: string): string => {
+  try {
+    const domain = new URL(url).hostname;
+    return domain.replace('www.', '');
+  } catch (error) {
+    return url;
+  }
+};
+
+// Generate a color based on a string (for bookmarks without specified colors)
+export const generateColorFromString = (str: string): string => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = hash % 360;
+  return `hsl(${hue}, 65%, 55%)`;
+};
 
 // Format seconds to MM:SS display format
 export const formatTime = (seconds: number): string => {

@@ -28,6 +28,14 @@ export type Task = {
   recurrence?: RecurrenceRule; // Optional recurrence information
 };
 
+export type Bookmark = {
+  id: string;
+  title: string;
+  url: string;
+  iconUrl?: string;
+  color?: string;
+};
+
 export type DailyProgress = {
   date: string;
   tasksCompleted: number;
