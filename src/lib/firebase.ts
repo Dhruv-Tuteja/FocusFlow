@@ -108,13 +108,19 @@ export const getUserData = async (userId: string) => {
 // Tasks
 export const saveTasks = async (userId: string, tasks: Task[]) => {
   try {
-    console.log('Saving tasks to Firestore:', tasks.length);
+    console.log('Saving tasks to Firestore:', tasks.length, 'tasks for user', userId);
+    
+    if (!userId) {
+      console.error('Cannot save tasks: User ID is null or undefined');
+      return { success: false, error: 'User ID is required' };
+    }
     
     // Check if user document exists
     const userDoc = await getDoc(doc(db, 'users', userId));
     
     if (!userDoc.exists()) {
       // Create the document with tasks if it doesn't exist
+      console.log('Creating new user document with tasks');
       await setDoc(doc(db, 'users', userId), { 
         tasks,
         createdAt: serverTimestamp(),
@@ -122,14 +128,22 @@ export const saveTasks = async (userId: string, tasks: Task[]) => {
       });
     } else {
       // Update existing document
+      console.log('Updating existing user document with tasks');
       await updateDoc(doc(db, 'users', userId), { 
         tasks,
         updatedAt: serverTimestamp()
       });
     }
     
-    console.log('Tasks saved successfully');
-    return { success: true };
+    // Verify the save was successful by reading the data back
+    const verifyDoc = await getDoc(doc(db, 'users', userId));
+    if (verifyDoc.exists() && verifyDoc.data().tasks) {
+      console.log('Tasks saved and verified successfully. Count:', verifyDoc.data().tasks.length);
+      return { success: true };
+    } else {
+      console.error('Tasks were not saved properly');
+      return { success: false, error: 'Tasks were not saved properly' };
+    }
   } catch (error: unknown) {
     console.error('Error saving tasks:', error);
     return { 
@@ -142,13 +156,19 @@ export const saveTasks = async (userId: string, tasks: Task[]) => {
 // Progress
 export const saveProgress = async (userId: string, progress: DailyProgress[]) => {
   try {
-    console.log('Saving progress to Firestore:', progress.length);
+    console.log('Saving progress to Firestore:', progress.length, 'entries for user', userId);
+    
+    if (!userId) {
+      console.error('Cannot save progress: User ID is null or undefined');
+      return { success: false, error: 'User ID is required' };
+    }
     
     // Check if user document exists
     const userDoc = await getDoc(doc(db, 'users', userId));
     
     if (!userDoc.exists()) {
       // Create the document with progress if it doesn't exist
+      console.log('Creating new user document with progress data');
       await setDoc(doc(db, 'users', userId), { 
         progress,
         createdAt: serverTimestamp(),
@@ -156,14 +176,22 @@ export const saveProgress = async (userId: string, progress: DailyProgress[]) =>
       });
     } else {
       // Update existing document
+      console.log('Updating existing user document with progress data');
       await updateDoc(doc(db, 'users', userId), { 
         progress,
         updatedAt: serverTimestamp()
       });
     }
     
-    console.log('Progress saved successfully');
-    return { success: true };
+    // Verify the save was successful
+    const verifyDoc = await getDoc(doc(db, 'users', userId));
+    if (verifyDoc.exists() && verifyDoc.data().progress) {
+      console.log('Progress saved and verified successfully. Count:', verifyDoc.data().progress.length);
+      return { success: true };
+    } else {
+      console.error('Progress data was not saved properly');
+      return { success: false, error: 'Progress data was not saved properly' };
+    }
   } catch (error: unknown) {
     console.error('Error saving progress:', error);
     return { 
@@ -176,13 +204,19 @@ export const saveProgress = async (userId: string, progress: DailyProgress[]) =>
 // Streak
 export const saveStreak = async (userId: string, streak: StreakData) => {
   try {
-    console.log('Saving streak to Firestore:', streak);
+    console.log('Saving streak to Firestore:', streak, 'for user', userId);
+    
+    if (!userId) {
+      console.error('Cannot save streak: User ID is null or undefined');
+      return { success: false, error: 'User ID is required' };
+    }
     
     // Check if user document exists
     const userDoc = await getDoc(doc(db, 'users', userId));
     
     if (!userDoc.exists()) {
       // Create the document with streak if it doesn't exist
+      console.log('Creating new user document with streak data');
       await setDoc(doc(db, 'users', userId), { 
         streak,
         createdAt: serverTimestamp(),
@@ -190,14 +224,22 @@ export const saveStreak = async (userId: string, streak: StreakData) => {
       });
     } else {
       // Update existing document
+      console.log('Updating existing user document with streak data');
       await updateDoc(doc(db, 'users', userId), { 
         streak,
         updatedAt: serverTimestamp()
       });
     }
     
-    console.log('Streak saved successfully');
-    return { success: true };
+    // Verify the save was successful
+    const verifyDoc = await getDoc(doc(db, 'users', userId));
+    if (verifyDoc.exists() && verifyDoc.data().streak) {
+      console.log('Streak saved and verified successfully:', verifyDoc.data().streak);
+      return { success: true };
+    } else {
+      console.error('Streak data was not saved properly');
+      return { success: false, error: 'Streak data was not saved properly' };
+    }
   } catch (error: unknown) {
     console.error('Error saving streak:', error);
     return { 

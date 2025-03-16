@@ -5,7 +5,8 @@ import { getUserData } from '@/lib/firebase';
 import { Task, DailyProgress, StreakData } from '@/types/task';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/hooks/use-toast';
-import { BarChart, Calendar, CheckCircle2, Target } from 'lucide-react';
+import { BarChart, Calendar, CheckCircle2, Target, Home } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const Profile = () => {
   const { user } = useAuth();
@@ -94,7 +95,18 @@ const Profile = () => {
 
   return (
     <div className="container max-w-6xl mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">Profile Statistics</h1>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold">Profile Statistics</h1>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate('/')}
+          className="flex items-center gap-2"
+        >
+          <Home className="h-4 w-4" />
+          Return to Home
+        </Button>
+      </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
         {/* Total Tasks Card */}

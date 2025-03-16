@@ -41,6 +41,10 @@ const Index = () => {
   const navigate = useNavigate();
   const { user, signOut, setShowLoginDialog } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const [todayString, setTodayString] = useState(getTodayDateString());
+  const [todayTasks, setTodayTasks] = useState<Task[]>([]);
+  const [todayCompleted, setTodayCompleted] = useState(0);
+  const [todayProgress, setTodayProgress] = useState(0);
 
   // Load user data when user changes
   useEffect(() => {
@@ -118,6 +122,33 @@ const Index = () => {
     loadUserData();
   }, [user, toast]);
 
+  // Calculate today's tasks and progress
+  useEffect(() => {
+    const calculateTodayProgress = () => {
+      const todayString = getTodayDateString();
+      const filteredTasks = tasks.filter(task => 
+        task.dueDate === todayString || 
+        (task.recurrence && isTaskDueToday(task))
+      );
+      const completedTasks = filteredTasks.filter(task => task.status === "completed").length;
+      const progressPercentage = filteredTasks.length > 0 ? (completedTasks / filteredTasks.length) * 100 : 0;
+      
+      console.log('Today\'s progress calculated:', {
+        date: todayString,
+        totalTasks: filteredTasks.length,
+        completedTasks: completedTasks,
+        progressPercentage: progressPercentage
+      });
+      
+      setTodayString(todayString);
+      setTodayTasks(filteredTasks);
+      setTodayCompleted(completedTasks);
+      setTodayProgress(progressPercentage);
+    };
+
+    calculateTodayProgress();
+  }, [tasks]);
+
   // Update daily progress
   useEffect(() => {
     const updateDailyProgress = async () => {
@@ -126,11 +157,8 @@ const Index = () => {
       try {
         console.log('Updating daily progress...');
         const today = getTodayDateString();
-        const todayTasks = tasks.filter(task => 
-          task.dueDate === today || 
-          (task.recurrence && isTaskDueToday(task))
-        );
         
+        // Use the calculated todayTasks from the main component
         if (todayTasks.length === 0) {
           return;
         }
@@ -191,7 +219,7 @@ const Index = () => {
     };
 
     updateDailyProgress();
-  }, [user, tasks]);
+  }, [user, tasks, todayTasks]);
 
   const handleAddTask = async (task: Task) => {
     if (!user) return;
@@ -401,14 +429,6 @@ const Index = () => {
       });
     }
   };
-
-  const todayString = getTodayDateString();
-  const todayTasks = tasks.filter(task => 
-    task.dueDate === todayString || 
-    (task.recurrence && isTaskDueToday(task))
-  );
-  const todayCompleted = todayTasks.filter(task => task.status === "completed").length;
-  const todayProgress = todayTasks.length > 0 ? (todayCompleted / todayTasks.length) * 100 : 0;
 
   // Update the account dropdown menu
   const accountDropdownContent = (
