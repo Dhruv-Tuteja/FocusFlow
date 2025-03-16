@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { ChevronLeft, ChevronRight, Flame } from "lucide-react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from "date-fns";
@@ -48,10 +47,23 @@ const Calendar: React.FC<CalendarProps> = ({ progress, streak, onDateSelect }) =
 
   const findProgressForDay = (day: Date): DailyProgress | undefined => {
     const dateString = format(day, "yyyy-MM-dd");
-    return progress.find((p) => p.date === dateString);
+    const foundProgress = progress.find((p) => p.date === dateString);
+    
+    // Debug logging to see what progress data we have for this day
+    if (foundProgress) {
+      console.log(`Found progress for ${dateString}:`, {
+        completion: foundProgress.completion,
+        tasksCompleted: foundProgress.tasksCompleted,
+        tasksPlanned: foundProgress.tasksPlanned
+      });
+    }
+    
+    return foundProgress;
   };
 
   const getProgressGradientStyle = (completion: number) => {
+    console.log(`Getting color for completion: ${completion}`);
+    
     if (completion === 0) {
       return { background: 'linear-gradient(135deg, hsl(var(--task-empty)) 0%, hsl(0, 84%, 95%) 100%)' };
     }
@@ -127,10 +139,16 @@ const Calendar: React.FC<CalendarProps> = ({ progress, streak, onDateSelect }) =
           {monthDays.map((day) => {
             const dayProgress = findProgressForDay(day);
             const dateString = format(day, "yyyy-MM-dd");
-            const style = dayProgress 
-              ? getProgressGradientStyle(dayProgress.completion) 
-              : { background: 'hsl(var(--muted))' };
-              
+            
+            // Default style for days with no progress data
+            let style = { background: 'hsl(var(--muted))' };
+            
+            // If we have progress data, use it to determine the color
+            if (dayProgress) {
+              style = getProgressGradientStyle(dayProgress.completion);
+              console.log(`Applying style for ${dateString}:`, style);
+            }
+            
             return (
               <TooltipProvider key={dateString}>
                 <Tooltip>

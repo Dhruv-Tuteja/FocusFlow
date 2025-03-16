@@ -186,6 +186,9 @@ export const saveProgress = async (userId: string, progress: DailyProgress[]) =>
       return { success: false, error: 'User ID is required' };
     }
     
+    // Log the raw progress data for debugging
+    console.log('Progress data to save:', JSON.stringify(progress));
+    
     // Remove undefined values from progress
     const cleanedProgress = removeUndefinedValues(progress);
     
@@ -212,7 +215,13 @@ export const saveProgress = async (userId: string, progress: DailyProgress[]) =>
     // Verify the save was successful
     const verifyDoc = await getDoc(doc(db, 'users', userId));
     if (verifyDoc.exists() && verifyDoc.data().progress) {
-      console.log('Progress saved and verified successfully. Count:', verifyDoc.data().progress.length);
+      const savedProgress = verifyDoc.data().progress;
+      console.log('Progress saved and verified successfully:', savedProgress.length, 'entries');
+      
+      // Check if the saved data has colors
+      const hasColorsData = savedProgress.some((p: any) => p.completion > 0);
+      console.log('Progress data has completion values:', hasColorsData);
+      
       return { success: true };
     } else {
       console.error('Progress data was not saved properly');

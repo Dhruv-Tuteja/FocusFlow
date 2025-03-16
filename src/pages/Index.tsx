@@ -153,7 +153,7 @@ const Index = () => {
   // Update daily progress
   useEffect(() => {
     const updateDailyProgress = async () => {
-      if (!user || tasks.length === 0) return;
+      if (!user) return;
 
       try {
         console.log('Updating daily progress...');
@@ -163,14 +163,10 @@ const Index = () => {
         console.log('Current progress array:', progress);
         console.log('Today\'s tasks:', todayTasks);
         
-        // Use the calculated todayTasks from the main component
-        if (todayTasks.length === 0) {
-          console.log('No tasks for today, skipping progress update');
-          return;
-        }
-
-        const completedTasks = todayTasks.filter(task => task.status === "completed");
-        const completion = todayTasks.length > 0 ? completedTasks.length / todayTasks.length : 0;
+        // Create a progress entry even if there are no tasks
+        // This ensures the activity graph shows data for every day the user logs in
+        let completedTasks = todayTasks.filter(task => task.status === "completed");
+        let completion = todayTasks.length > 0 ? completedTasks.length / todayTasks.length : 0;
         
         console.log('Completion calculation:', {
           completed: completedTasks.length,
@@ -198,12 +194,13 @@ const Index = () => {
           );
         } else {
           console.log('Creating new progress entry for today');
+          // Always create an entry for today, even with zero tasks
           updatedProgress = [
             ...progress,
             {
               date: today,
               tasksCompleted: completedTasks.length,
-              tasksPlanned: todayTasks.length,
+              tasksPlanned: todayTasks.length || 0,
               completion,
               tasks: todayTasks,
             },
@@ -213,20 +210,29 @@ const Index = () => {
         console.log('Setting updated progress:', updatedProgress);
         console.log('Progress count before update:', progress.length);
         console.log('Progress count after update:', updatedProgress.length);
+        
+        // Make sure to update state before saving to Firebase
         setProgress(updatedProgress);
         
+        // Save to Firebase and capture result
         const saveResult = await saveProgress(user.uid, updatedProgress);
         console.log('Progress save result:', saveResult);
         
-        const updatedStreak = updateStreak(updatedProgress, streak);
-        if (
-          updatedStreak.currentStreak !== streak.currentStreak ||
-          updatedStreak.longestStreak !== streak.longestStreak ||
-          updatedStreak.lastCompletionDate !== streak.lastCompletionDate
-        ) {
-          console.log('Setting updated streak:', updatedStreak);
-          setStreak(updatedStreak);
-          await saveStreak(user.uid, updatedStreak);
+        // Verify the progress was saved with color data
+        if (saveResult.success) {
+          // Now update streak based on the updated progress
+          const updatedStreak = updateStreak(updatedProgress, streak);
+          if (
+            updatedStreak.currentStreak !== streak.currentStreak ||
+            updatedStreak.longestStreak !== streak.longestStreak ||
+            updatedStreak.lastCompletionDate !== streak.lastCompletionDate
+          ) {
+            console.log('Setting updated streak:', updatedStreak);
+            setStreak(updatedStreak);
+            await saveStreak(user.uid, updatedStreak);
+          }
+        } else {
+          console.error('Failed to save progress:', saveResult.error);
         }
       } catch (error) {
         console.error('Error updating daily progress:', error);
@@ -238,8 +244,9 @@ const Index = () => {
       }
     };
 
+    // Call the function
     updateDailyProgress();
-  }, [user, tasks, todayTasks]);
+  }, [user, tasks, todayTasks, progress, streak]);
 
   const handleAddTask = async (task: Task) => {
     if (!user) return;
