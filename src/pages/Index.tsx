@@ -42,7 +42,6 @@ const Index = () => {
   const navigate = useNavigate();
   const { user, signOut, setShowLoginDialog } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const [todayString, setTodayString] = useState(getTodayDateString());
   const [todayTasks, setTodayTasks] = useState<Task[]>([]);
   const [todayCompleted, setTodayCompleted] = useState(0);
   const [todayProgress, setTodayProgress] = useState(0);
@@ -141,7 +140,6 @@ const Index = () => {
         progressPercentage: progressPercentage
       });
       
-      setTodayString(todayString);
       setTodayTasks(filteredTasks);
       setTodayCompleted(completedTasks);
       setTodayProgress(progressPercentage);
@@ -479,49 +477,6 @@ const Index = () => {
       )}
     </DropdownMenuContent>
   );
-
-  // Determine if a task is due today based on recurrence pattern
-  const isTaskDueToday = (task: Task): boolean => {
-    if (!task.recurrence) return false;
-    
-    console.log('Checking recurrence for task:', task.title);
-    const { pattern, weekDays } = task.recurrence;
-    const today = new Date();
-    const dueDate = new Date(task.dueDate);
-    
-    // For "once" tasks, only due on the specific date
-    if (pattern === 'once') {
-      const isMatch = format(today, 'yyyy-MM-dd') === format(dueDate, 'yyyy-MM-dd');
-      console.log(`Task "${task.title}" is due once on ${format(dueDate, 'yyyy-MM-dd')}, today is ${format(today, 'yyyy-MM-dd')}, match: ${isMatch}`);
-      return isMatch;
-    }
-    
-    // For "daily" tasks, due every day after the start date
-    if (pattern === 'daily') {
-      const isAfterStart = today >= dueDate;
-      console.log(`Task "${task.title}" is daily, after start date: ${isAfterStart}`);
-      return isAfterStart;
-    }
-    
-    // For "weekly" tasks, due on specific days of the week
-    if (pattern === 'weekly' && weekDays) {
-      // Get day name and convert to lowercase (monday, tuesday, etc.)
-      const todayName = format(today, 'EEEE').toLowerCase();
-      // Check if the weekDays array includes today's name
-      const isDueToday = weekDays.includes(todayName as any) && today >= dueDate;
-      console.log(`Task "${task.title}" is weekly on ${weekDays.join(', ')}, today is ${todayName}, match: ${isDueToday}`);
-      return isDueToday;
-    }
-    
-    // For "monthly" tasks, due on the same day of each month
-    if (pattern === 'monthly') {
-      const isDueDayOfMonth = today.getDate() === dueDate.getDate() && today >= dueDate;
-      console.log(`Task "${task.title}" is monthly on day ${dueDate.getDate()}, today is day ${today.getDate()}, match: ${isDueDayOfMonth}`);
-      return isDueDayOfMonth;
-    }
-    
-    return false;
-  };
 
   return (
     <div className="min-h-screen bg-background">

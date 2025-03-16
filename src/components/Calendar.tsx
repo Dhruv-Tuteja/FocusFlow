@@ -49,21 +49,16 @@ const Calendar: React.FC<CalendarProps> = ({ progress, streak, onDateSelect }) =
     const dateString = format(day, "yyyy-MM-dd");
     const foundProgress = progress.find((p) => p.date === dateString);
     
-    // Debug logging to see what progress data we have for this day
-    if (foundProgress) {
-      console.log(`Found progress for ${dateString}:`, {
-        completion: foundProgress.completion,
-        tasksCompleted: foundProgress.tasksCompleted,
-        tasksPlanned: foundProgress.tasksPlanned
-      });
+    // Only log when we actually find progress data
+    if (foundProgress && foundProgress.completion > 0) {
+      console.log(`Found progress for ${dateString}: ${Math.round(foundProgress.completion * 100)}% (${foundProgress.tasksCompleted}/${foundProgress.tasksPlanned})`);
     }
     
     return foundProgress;
   };
 
   const getProgressGradientStyle = (completion: number) => {
-    console.log(`Getting color for completion: ${completion}`);
-    
+    // No need to log every style calculation
     if (completion === 0) {
       return { background: 'linear-gradient(135deg, hsl(var(--task-empty)) 0%, hsl(0, 84%, 95%) 100%)' };
     }
@@ -146,7 +141,10 @@ const Calendar: React.FC<CalendarProps> = ({ progress, streak, onDateSelect }) =
             // If we have progress data, use it to determine the color
             if (dayProgress) {
               style = getProgressGradientStyle(dayProgress.completion);
-              console.log(`Applying style for ${dateString}:`, style);
+              // Only log significant progress
+              if (dayProgress.completion > 0) {
+                console.log(`Day ${dateString}: ${Math.round(dayProgress.completion * 100)}% progress`);
+              }
             }
             
             return (

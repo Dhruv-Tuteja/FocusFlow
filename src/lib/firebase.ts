@@ -7,7 +7,6 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   onAuthStateChanged,
-  User,
 } from 'firebase/auth';
 import { 
   getFirestore, 

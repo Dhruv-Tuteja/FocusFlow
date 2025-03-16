@@ -55,22 +55,40 @@ export const isTaskDueToday = (task: Task): boolean => {
   const today = getTodayDateString();
   
   // Simple case: task is due today
-  if (task.dueDate === today) return true;
+  if (task.dueDate === today) {
+    console.log(`Task "${task.title}" is due today directly (${today})`);
+    return true;
+  }
   
   // No recurrence, only check direct date match
-  if (!task.recurrence) return false;
+  if (!task.recurrence) {
+    console.log(`Task "${task.title}" has no recurrence and is not due today`);
+    return false;
+  }
   
   // Check recurrence based on pattern
   const { pattern, weekDays } = task.recurrence;
   const todayDate = new Date();
   const dueDate = parseISO(task.dueDate);
   
+  // First, check if we've reached the start date
+  if (todayDate < dueDate) {
+    console.log(`Task "${task.title}" start date hasn't been reached yet`);
+    return false;
+  }
+  
+  console.log(`Checking recurrence for task "${task.title}" with pattern: ${pattern}`);
+  
   switch (pattern) {
     case 'daily':
+      console.log(`Task "${task.title}" is recurring daily - due today`);
       return true; // Daily tasks are due every day
       
     case 'weekly':
-      if (!weekDays || weekDays.length === 0) return false;
+      if (!weekDays || weekDays.length === 0) {
+        console.log(`Task "${task.title}" is weekly but no weekdays specified`);
+        return false;
+      }
       
       // Check if today is one of the specified week days
       const todayWeekDayIndex = getDay(todayDate);
@@ -78,13 +96,18 @@ export const isTaskDueToday = (task: Task): boolean => {
       const dayNames: WeekDay[] = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
       const todayWeekDay = dayNames[todayWeekDayIndex];
       
-      return weekDays.includes(todayWeekDay);
+      const isDue = weekDays.includes(todayWeekDay);
+      console.log(`Task "${task.title}" is weekly on ${weekDays.join(', ')}. Today is ${todayWeekDay}. Due today: ${isDue}`);
+      return isDue;
       
     case 'monthly':
       // Check if today has the same day of month as the task's due date
-      return todayDate.getDate() === dueDate.getDate();
+      const isDueToday = todayDate.getDate() === dueDate.getDate();
+      console.log(`Task "${task.title}" is monthly on day ${dueDate.getDate()}. Today is day ${todayDate.getDate()}. Due today: ${isDueToday}`);
+      return isDueToday;
       
     default:
+      console.log(`Task "${task.title}" has unknown recurrence pattern: ${pattern}`);
       return false;
   }
 };
