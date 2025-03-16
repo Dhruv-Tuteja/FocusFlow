@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from '@/contexts/ThemeContext';
-import { getUserData, saveTasks, saveProgress, saveStreak, saveBookmarks } from "@/lib/firebase";
+import { getUserData, saveTasks, saveProgress, saveStreak, saveBookmarks, saveTags } from "@/lib/firebase";
 import { format } from "date-fns";
 
 const Index = () => {
@@ -96,7 +96,30 @@ const Index = () => {
           
           // Set tags
           const loadedTags = result.data.tags || [];
-          setTags(loadedTags);
+          
+          // If user has no tags, create default tags
+          if (loadedTags.length === 0) {
+            console.log('No tags found, creating default tags');
+            const defaultTags = [
+              { id: "1", name: "Work", color: "#4C51BF" },
+              { id: "2", name: "Personal", color: "#38A169" },
+              { id: "3", name: "Health", color: "#E53E3E" },
+              { id: "4", name: "Learning", color: "#D69E2E" },
+              { id: "5", name: "Family", color: "#DD6B20" },
+              { id: "6", name: "Home", color: "#805AD5" },
+              { id: "7", name: "Finance", color: "#2F855A" },
+              { id: "8", name: "Urgent", color: "#F56565" },
+              { id: "9", name: "Hobby", color: "#4299E1" },
+              { id: "10", name: "Social", color: "#ED64A6" },
+            ];
+            
+            setTags(defaultTags);
+            await saveTags(user.uid, defaultTags);
+            console.log('Default tags created and saved');
+          } else {
+            console.log('Setting tags:', loadedTags.length);
+            setTags(loadedTags);
+          }
           
           // Set bookmarks
           const loadedBookmarks = result.data.bookmarks || [];
@@ -281,12 +304,18 @@ const Index = () => {
   }, [user, tasks, todayTasks, progress, streak]);
 
   const handleAddTask = async (task: Task) => {
-    if (!user) return;
+    if (!user) {
+      toast({
+        title: "Login Required",
+        description: "Please log in to add tasks.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
-      console.log('Adding task:', task.title);
+      console.log('Adding task:', task);
       const updatedTasks = [...tasks, task];
-      console.log('New task array length:', updatedTasks.length);
       
       // Update local state first
       setTasks(updatedTasks);
@@ -360,6 +389,50 @@ const Index = () => {
         description: "Failed to save your task. Please try again.",
         variant: "destructive",
       });
+    }
+  };
+
+  // Add a function to handle creating new tags
+  const handleAddTag = async (tag: TaskTag) => {
+    if (!user) {
+      toast({
+        title: "Login Required",
+        description: "Please log in to add tags.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      console.log('Adding tag:', tag);
+      const updatedTags = [...tags, tag];
+      
+      // Update local state first
+      setTags(updatedTags);
+      
+      // Then save to Firestore
+      console.log('Saving tags to Firestore...');
+      const result = await saveTags(user.uid, updatedTags);
+      console.log('Save tags result:', result);
+      
+      if (!result.success) {
+        throw new Error('Failed to save tag');
+      }
+      
+      toast({
+        title: "Tag created",
+        description: `"${tag.name}" tag has been created.`,
+      });
+      
+      return tag;
+    } catch (error) {
+      console.error('Error adding tag:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save your tag. Please try again.",
+        variant: "destructive",
+      });
+      return null;
     }
   };
 
@@ -745,7 +818,11 @@ const Index = () => {
           {/* Tasks Column - 50% */}
           <div className="col-span-10 md:col-span-5">
             {!selectedDate && user ? (
-              <TaskForm onAddTask={handleAddTask} availableTags={tags} />
+              <TaskForm 
+                onAddTask={handleAddTask} 
+                availableTags={tags} 
+                onAddTag={handleAddTag}
+              />
             ) : !selectedDate && !user ? (
               <Card className="mb-6">
                 <CardContent className="pt-6">

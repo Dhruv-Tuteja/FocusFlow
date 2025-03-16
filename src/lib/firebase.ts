@@ -7,6 +7,8 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   onAuthStateChanged,
+  User,
+  updateProfile
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -16,7 +18,7 @@ import {
   updateDoc,
   serverTimestamp,
 } from 'firebase/firestore';
-import { Task, DailyProgress, StreakData, Bookmark } from '@/types/task';
+import { Task, DailyProgress, StreakData, Bookmark, TaskTag } from '@/types/task';
 
 // Your Firebase configuration
 const firebaseConfig = {
@@ -330,6 +332,50 @@ export const saveBookmarks = async (userId: string, bookmarks: Bookmark[]) => {
     return { success: true };
   } catch (error: unknown) {
     console.error('Error saving bookmarks:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+};
+
+// Tags
+export const saveTags = async (userId: string, tags: TaskTag[]) => {
+  try {
+    console.log('Saving tags to Firestore:', tags.length, 'tags for user', userId);
+    
+    if (!userId) {
+      console.error('Cannot save tags: User ID is null or undefined');
+      return { success: false, error: 'User ID is required' };
+    }
+    
+    // Remove undefined values from tags
+    const cleanedTags = removeUndefinedValues(tags);
+    
+    // Check if user document exists
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    
+    if (!userDoc.exists()) {
+      // Create the document with tags if it doesn't exist
+      console.log('Creating new user document with tags');
+      await setDoc(doc(db, 'users', userId), { 
+        tags: cleanedTags,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    } else {
+      // Update existing document
+      console.log('Updating existing user document with tags');
+      await updateDoc(doc(db, 'users', userId), { 
+        tags: cleanedTags,
+        updatedAt: serverTimestamp()
+      });
+    }
+    
+    console.log('Tags saved successfully');
+    return { success: true };
+  } catch (error: unknown) {
+    console.error('Error saving tags:', error);
     return { 
       success: false, 
       error: error instanceof Error ? error.message : String(error)

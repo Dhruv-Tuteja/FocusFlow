@@ -231,8 +231,14 @@ export const loadTags = (): TaskTag[] => {
   const defaultTags = [
     { id: "1", name: "Work", color: "#4C51BF" },
     { id: "2", name: "Personal", color: "#38A169" },
-    { id: "3", name: "Urgent", color: "#E53E3E" },
+    { id: "3", name: "Health", color: "#E53E3E" },
     { id: "4", name: "Learning", color: "#D69E2E" },
+    { id: "5", name: "Family", color: "#DD6B20" },
+    { id: "6", name: "Home", color: "#805AD5" },
+    { id: "7", name: "Finance", color: "#2F855A" },
+    { id: "8", name: "Urgent", color: "#F56565" },
+    { id: "9", name: "Hobby", color: "#4299E1" },
+    { id: "10", name: "Social", color: "#ED64A6" },
   ];
   
   saveTags(defaultTags);

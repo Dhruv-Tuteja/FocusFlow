@@ -1,13 +1,21 @@
-
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { format } from "date-fns";
-import { Calendar as CalendarIcon, X, Plus, Tag, Repeat } from "lucide-react";
+import { Calendar as CalendarIcon, X, Plus, Tag as TagIcon, Repeat, Check, RotateCw } from "lucide-react";
 import { Task, TaskTag, RecurrencePattern, WeekDay } from "@/types/task";
 import { generateId } from "@/utils/taskUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
+import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+  DialogClose
+} from "@/components/ui/dialog";
 import {
   Popover,
   PopoverContent,
@@ -18,6 +26,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
   Select,
@@ -26,6 +35,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -36,19 +51,45 @@ import {
   FormItem,
   FormLabel,
 } from "@/components/ui/form";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface TaskFormProps {
   onAddTask: (task: Task) => void;
   availableTags: TaskTag[];
+  onAddTag?: (tag: TaskTag) => void;
 }
 
-const TaskForm: React.FC<TaskFormProps> = ({ onAddTask, availableTags }) => {
+// Array of predefined colors for new tags
+const TAG_COLORS = [
+  "#4C51BF", // Indigo
+  "#38A169", // Green
+  "#E53E3E", // Red
+  "#D69E2E", // Yellow
+  "#DD6B20", // Orange
+  "#805AD5", // Purple
+  "#2F855A", // Teal
+  "#F56565", // Pink
+  "#4299E1", // Blue
+  "#ED64A6", // Pink
+];
+
+const TaskForm: React.FC<TaskFormProps> = ({ 
+  onAddTask, 
+  availableTags,
+  onAddTag
+}) => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState<Date>(new Date());
   const [estimatedMinutes, setEstimatedMinutes] = useState<number>(0);
   const [selectedTags, setSelectedTags] = useState<TaskTag[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  
+  // Tag creation states
+  const [isCreateTagDialogOpen, setIsCreateTagDialogOpen] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  const [newTagColor, setNewTagColor] = useState(TAG_COLORS[0]);
+  const newTagInputRef = useRef<HTMLInputElement>(null);
   
   // Scheduling states
   const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern>("once");
@@ -125,6 +166,24 @@ const TaskForm: React.FC<TaskFormProps> = ({ onAddTask, availableTags }) => {
     } else {
       setSelectedWeekDays([...selectedWeekDays, day]);
     }
+  };
+  
+  const handleCreateNewTag = () => {
+    if (!newTagName.trim() || !onAddTag) return;
+    
+    const newTag: TaskTag = {
+      id: generateId(),
+      name: newTagName.trim(),
+      color: newTagColor,
+    };
+    
+    onAddTag(newTag);
+    addTag(newTag); // Auto-select the newly created tag
+    
+    // Reset tag creation form
+    setNewTagName("");
+    setNewTagColor(TAG_COLORS[Math.floor(Math.random() * TAG_COLORS.length)]);
+    setIsCreateTagDialogOpen(false);
   };
 
   return (
@@ -210,29 +269,73 @@ const TaskForm: React.FC<TaskFormProps> = ({ onAddTask, availableTags }) => {
               </div>
               
               <div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
+                <Popover>
+                  <PopoverTrigger asChild>
                     <Button variant="outline" className="flex gap-2">
-                      <Tag size={15} />
+                      <TagIcon size={15} />
                       <span>Tags</span>
                     </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    {availableTags.map(tag => (
-                      <DropdownMenuItem
-                        key={tag.id}
-                        onClick={() => addTag(tag)}
-                        className="flex items-center gap-2 cursor-pointer"
-                      >
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: tag.color }}
-                        />
-                        <span>{tag.name}</span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                  </PopoverTrigger>
+                  <PopoverContent align="end" className="w-64 p-0">
+                    <div className="flex flex-col">
+                      <div className="p-2 border-b">
+                        <h4 className="text-sm font-medium mb-1">Select Tags</h4>
+                        {onAddTag && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full flex justify-between items-center text-sm"
+                            onClick={() => {
+                              setIsCreateTagDialogOpen(true);
+                              setTimeout(() => newTagInputRef.current?.focus(), 100);
+                            }}
+                          >
+                            <span>Create new tag</span>
+                            <Plus size={14} />
+                          </Button>
+                        )}
+                      </div>
+                      
+                      <ScrollArea className="h-[200px]">
+                        <div className="p-2">
+                          {availableTags.length > 0 ? (
+                            availableTags.map(tag => (
+                              <div
+                                key={tag.id}
+                                className={cn(
+                                  "flex items-center gap-2 px-2 py-1.5 rounded-md mb-1 cursor-pointer hover:bg-muted/50",
+                                  selectedTags.some(t => t.id === tag.id) && "bg-muted"
+                                )}
+                                onClick={() => {
+                                  if (selectedTags.some(t => t.id === tag.id)) {
+                                    removeTag(tag.id);
+                                  } else {
+                                    addTag(tag);
+                                  }
+                                }}
+                              >
+                                <div className="flex items-center gap-2 flex-1">
+                                  <div
+                                    className="w-3 h-3 rounded-full"
+                                    style={{ backgroundColor: tag.color }}
+                                  />
+                                  <span className="text-sm">{tag.name}</span>
+                                </div>
+                                {selectedTags.some(t => t.id === tag.id) && (
+                                  <Check size={14} className="text-primary" />
+                                )}
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-sm text-muted-foreground text-center py-2">
+                              No tags available
+                            </div>
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
               
               <div>
@@ -362,6 +465,72 @@ const TaskForm: React.FC<TaskFormProps> = ({ onAddTask, availableTags }) => {
           </form>
         </div>
       )}
+      
+      {/* Create Tag Dialog */}
+      <Dialog 
+        open={isCreateTagDialogOpen} 
+        onOpenChange={setIsCreateTagDialogOpen}
+      >
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Create New Tag</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <FormLabel htmlFor="tag-name">Tag Name</FormLabel>
+              <Input
+                id="tag-name"
+                ref={newTagInputRef}
+                value={newTagName}
+                onChange={(e) => setNewTagName(e.target.value)}
+                placeholder="Enter tag name"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <FormLabel>Tag Color</FormLabel>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {TAG_COLORS.map(color => (
+                  <TooltipProvider key={color} delayDuration={300}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className={cn(
+                            "w-8 h-8 rounded-full cursor-pointer transition-transform",
+                            newTagColor === color && "ring-2 ring-primary ring-offset-2"
+                          )}
+                          style={{ backgroundColor: color }}
+                          onClick={() => setNewTagColor(color)}
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{color}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              type="button" 
+              variant="ghost"
+              onClick={() => setIsCreateTagDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="button" 
+              onClick={handleCreateNewTag}
+              disabled={!newTagName.trim()}
+            >
+              Create Tag
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
