@@ -21,6 +21,8 @@ import {
   generateId,
   getTodayDateString,
   updateStreak,
+  updateRecurringTask,
+  isTaskDueToday,
 } from "@/utils/taskUtils";
 import { CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -78,7 +80,10 @@ const Index = () => {
 
   const updateDailyProgress = () => {
     const today = getTodayDateString();
-    const todayTasks = tasks.filter(task => task.dueDate === today);
+    const todayTasks = tasks.filter(task => 
+      task.dueDate === today || 
+      (task.recurrence && isTaskDueToday(task))
+    );
     
     if (todayTasks.length === 0) {
       return;
@@ -149,7 +154,9 @@ const Index = () => {
     if (!task) return;
 
     const newStatus: TaskStatus = task.status === "completed" ? "pending" : "completed";
-    const updatedTasks = tasks.map(t =>
+    
+    // Update this specific task
+    let updatedTasks = tasks.map(t =>
       t.id === taskId
         ? {
             ...t,
@@ -157,6 +164,11 @@ const Index = () => {
           }
         : t
     );
+    
+    // If task is being marked as completed and it's recurring, generate the next occurrence
+    if (newStatus === "completed" && task.recurrence && task.recurrence.pattern !== "once") {
+      updatedTasks = updateRecurringTask(task, updatedTasks);
+    }
 
     setTasks(updatedTasks);
     saveTasks(updatedTasks);
@@ -245,7 +257,10 @@ const Index = () => {
   };
 
   const todayString = getTodayDateString();
-  const todayTasks = tasks.filter(task => task.dueDate === todayString);
+  const todayTasks = tasks.filter(task => 
+    task.dueDate === todayString || 
+    (task.recurrence && isTaskDueToday(task))
+  );
   const todayCompleted = todayTasks.filter(task => task.status === "completed").length;
   const todayProgress = todayTasks.length > 0 ? (todayCompleted / todayTasks.length) * 100 : 0;
 

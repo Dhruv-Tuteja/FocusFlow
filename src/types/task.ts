@@ -7,14 +7,25 @@ export type TaskTag = {
 
 export type TaskStatus = 'pending' | 'in-progress' | 'completed';
 
+export type RecurrencePattern = 'once' | 'daily' | 'weekly' | 'monthly';
+
+export type WeekDay = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+export type RecurrenceRule = {
+  pattern: RecurrencePattern;
+  weekDays?: WeekDay[]; // For weekly recurrence
+  endDate?: string;     // Optional end date for the recurrence
+};
+
 export type Task = {
   id: string;
   title: string;
   description?: string;
-  dueDate: string;
+  dueDate: string;      // Initial/next due date
   estimatedMinutes?: number;
   status: TaskStatus;
   tags: TaskTag[];
+  recurrence?: RecurrenceRule; // Optional recurrence information
 };
 
 export type DailyProgress = {

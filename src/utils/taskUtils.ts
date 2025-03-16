@@ -1,5 +1,5 @@
-
-import { Task, DailyProgress, StreakData, TaskTag, UserProfile } from "@/types/task";
+import { Task, DailyProgress, StreakData, TaskTag, UserProfile, WeekDay, RecurrencePattern } from "@/types/task";
+import { addDays, addWeeks, addMonths, format, parseISO, isAfter, isSameDay, getDay } from "date-fns";
 
 // Format seconds to MM:SS display format
 export const formatTime = (seconds: number): string => {
@@ -17,6 +17,100 @@ export const saveTasks = (tasks: Task[]) => {
 export const loadTasks = (): Task[] => {
   const tasks = localStorage.getItem("tasks");
   return tasks ? JSON.parse(tasks) : [];
+};
+
+// Helper function to check if a task is due today
+export const isTaskDueToday = (task: Task): boolean => {
+  const today = getTodayDateString();
+  
+  // Simple case: task is due today
+  if (task.dueDate === today) return true;
+  
+  // No recurrence, only check direct date match
+  if (!task.recurrence) return false;
+  
+  // Check recurrence based on pattern
+  const { pattern, weekDays } = task.recurrence;
+  const todayDate = new Date();
+  const dueDate = parseISO(task.dueDate);
+  
+  switch (pattern) {
+    case 'daily':
+      return true; // Daily tasks are due every day
+      
+    case 'weekly':
+      if (!weekDays || weekDays.length === 0) return false;
+      
+      // Check if today is one of the specified week days
+      const todayWeekDayIndex = getDay(todayDate);
+      // Convert day index to weekDay name (0 = Sunday, 1 = Monday, etc.)
+      const dayNames: WeekDay[] = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const todayWeekDay = dayNames[todayWeekDayIndex];
+      
+      return weekDays.includes(todayWeekDay);
+      
+    case 'monthly':
+      // Check if today has the same day of month as the task's due date
+      return todayDate.getDate() === dueDate.getDate();
+      
+    default:
+      return false;
+  }
+};
+
+// Get the next occurrence date for a recurring task
+export const getNextOccurrence = (task: Task): string => {
+  if (!task.recurrence) return task.dueDate;
+  
+  const currentDate = parseISO(task.dueDate);
+  const { pattern } = task.recurrence;
+  
+  switch (pattern) {
+    case 'daily':
+      return format(addDays(currentDate, 1), 'yyyy-MM-dd');
+    
+    case 'weekly':
+      return format(addWeeks(currentDate, 1), 'yyyy-MM-dd');
+    
+    case 'monthly':
+      return format(addMonths(currentDate, 1), 'yyyy-MM-dd');
+    
+    default:
+      return task.dueDate;
+  }
+};
+
+// Update a task when it's completed, generating the next occurrence if it's recurring
+export const updateRecurringTask = (task: Task, tasks: Task[]): Task[] => {
+  // If this isn't a recurring task, just return the tasks array unchanged
+  if (!task.recurrence || task.recurrence.pattern === 'once') {
+    return tasks;
+  }
+  
+  // Check if we should stop recurrence due to end date
+  if (task.recurrence.endDate) {
+    const endDate = parseISO(task.recurrence.endDate);
+    const today = new Date();
+    
+    if (isAfter(today, endDate)) {
+      // Past the end date, don't create a new occurrence
+      return tasks;
+    }
+  }
+  
+  // Calculate next occurrence date
+  const nextDueDate = getNextOccurrence(task);
+  
+  // Create a new task for the next occurrence
+  const newTask: Task = {
+    ...task,
+    id: generateId(),
+    dueDate: nextDueDate,
+    status: 'pending'
+  };
+  
+  // Add the new occurrence to the tasks array
+  return [...tasks, newTask];
 };
 
 // Save daily progress to localStorage
@@ -115,7 +209,6 @@ export const getProgressColorClass = (completion: number): string => {
 };
 
 // Update streak information based on daily progress
-// Modified to only count days with 100% completion
 export const updateStreak = (progress: DailyProgress[], prevStreak: StreakData): StreakData => {
   const today = getTodayDateString();
   const todayProgress = progress.find(p => p.date === today);

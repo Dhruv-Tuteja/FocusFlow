@@ -1,8 +1,9 @@
+
 import React, { useState } from "react";
 import { format } from "date-fns";
-import { Calendar as CalendarIcon, X, Plus, Tag } from "lucide-react";
-import { Task, TaskTag } from "@/types/task";
-import { generateId, getTodayDateString } from "@/utils/taskUtils";
+import { Calendar as CalendarIcon, X, Plus, Tag, Repeat } from "lucide-react";
+import { Task, TaskTag, RecurrencePattern, WeekDay } from "@/types/task";
+import { generateId } from "@/utils/taskUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,8 +19,23 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+} from "@/components/ui/form";
 
 interface TaskFormProps {
   onAddTask: (task: Task) => void;
@@ -33,6 +49,22 @@ const TaskForm: React.FC<TaskFormProps> = ({ onAddTask, availableTags }) => {
   const [estimatedMinutes, setEstimatedMinutes] = useState<number>(0);
   const [selectedTags, setSelectedTags] = useState<TaskTag[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  
+  // Scheduling states
+  const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern>("once");
+  const [showRecurrenceOptions, setShowRecurrenceOptions] = useState(false);
+  const [selectedWeekDays, setSelectedWeekDays] = useState<WeekDay[]>([]);
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+
+  const weekdays: { name: WeekDay; label: string }[] = [
+    { name: "monday", label: "Monday" },
+    { name: "tuesday", label: "Tuesday" },
+    { name: "wednesday", label: "Wednesday" },
+    { name: "thursday", label: "Thursday" },
+    { name: "friday", label: "Friday" },
+    { name: "saturday", label: "Saturday" },
+    { name: "sunday", label: "Sunday" },
+  ];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,6 +81,17 @@ const TaskForm: React.FC<TaskFormProps> = ({ onAddTask, availableTags }) => {
       tags: [...selectedTags],
     };
     
+    // Add recurrence information if not a one-time task
+    if (recurrencePattern !== "once") {
+      newTask.recurrence = {
+        pattern: recurrencePattern,
+        // Only include weekDays for weekly recurrence
+        ...(recurrencePattern === "weekly" && { weekDays: selectedWeekDays }),
+        // Include end date if set
+        ...(endDate && { endDate: format(endDate, "yyyy-MM-dd") }),
+      };
+    }
+    
     onAddTask(newTask);
     resetForm();
     setIsOpen(false);
@@ -60,6 +103,10 @@ const TaskForm: React.FC<TaskFormProps> = ({ onAddTask, availableTags }) => {
     setDueDate(new Date());
     setEstimatedMinutes(0);
     setSelectedTags([]);
+    setRecurrencePattern("once");
+    setShowRecurrenceOptions(false);
+    setSelectedWeekDays([]);
+    setEndDate(undefined);
   };
 
   const addTag = (tag: TaskTag) => {
@@ -70,6 +117,14 @@ const TaskForm: React.FC<TaskFormProps> = ({ onAddTask, availableTags }) => {
 
   const removeTag = (tagId: string) => {
     setSelectedTags(selectedTags.filter(tag => tag.id !== tagId));
+  };
+
+  const toggleWeekDay = (day: WeekDay) => {
+    if (selectedWeekDays.includes(day)) {
+      setSelectedWeekDays(selectedWeekDays.filter(d => d !== day));
+    } else {
+      setSelectedWeekDays([...selectedWeekDays, day]);
+    }
   };
 
   return (
@@ -179,7 +234,101 @@ const TaskForm: React.FC<TaskFormProps> = ({ onAddTask, availableTags }) => {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
+              
+              <div>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  className="flex gap-2"
+                  onClick={() => setShowRecurrenceOptions(!showRecurrenceOptions)}
+                >
+                  <Repeat size={15} />
+                  <span>Schedule</span>
+                </Button>
+              </div>
             </div>
+            
+            {showRecurrenceOptions && (
+              <div className="p-3 border rounded-md bg-background/50">
+                <div className="mb-3">
+                  <label className="text-sm font-medium mb-1 block">Recurrence</label>
+                  <Select 
+                    value={recurrencePattern} 
+                    onValueChange={(value) => setRecurrencePattern(value as RecurrencePattern)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select frequency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="once">One-time task</SelectItem>
+                      <SelectItem value="daily">Daily</SelectItem>
+                      <SelectItem value="weekly">Weekly</SelectItem>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {recurrencePattern === "weekly" && (
+                  <div className="mb-3">
+                    <label className="text-sm font-medium mb-2 block">Repeat on</label>
+                    <div className="flex flex-wrap gap-2">
+                      {weekdays.map((day) => (
+                        <div key={day.name} className="flex items-center space-x-2">
+                          <Checkbox 
+                            id={`day-${day.name}`}
+                            checked={selectedWeekDays.includes(day.name)}
+                            onCheckedChange={() => toggleWeekDay(day.name)}
+                          />
+                          <label 
+                            htmlFor={`day-${day.name}`}
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            {day.label.slice(0, 3)}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {recurrencePattern !== "once" && (
+                  <div>
+                    <label className="text-sm font-medium mb-1 block">End date (optional)</label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start text-left font-normal"
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {endDate ? format(endDate, "PPP") : "No end date"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <div className="p-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => setEndDate(undefined)}
+                            className="mb-2"
+                          >
+                            Clear end date
+                          </Button>
+                          <Calendar
+                            mode="single"
+                            selected={endDate}
+                            onSelect={setEndDate}
+                            initialFocus
+                            className={cn("p-3 pointer-events-auto")}
+                            disabled={(date) => date < new Date()}
+                          />
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                )}
+              </div>
+            )}
             
             {selectedTags.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
