@@ -1,69 +1,123 @@
-# Welcome to your Lovable project
+# FocusFlow
 
-## Project info
+A modern productivity application designed to help you focus on what matters most. Track tasks, manage your time, and visualize your progress with FocusFlow.
 
-**URL**: https://lovable.dev/projects/45138e11-8be2-45e7-8472-d710c1942ee5
+![FocusFlow](https://i.imgur.com/qHAcfhX.png)
 
-## How can I edit this code?
+## Features
 
-There are several ways of editing your application.
+- **Task Management**: Create, edit, and organize tasks with due dates and recurrence options
+- **Progress Tracking**: Visualize your daily and weekly productivity with intuitive charts
+- **Streak System**: Build habits with a streak system that tracks your daily progress
+- **Bookmarks**: Save important links and resources for quick access
+- **User Authentication**: Secure login with email/password or Google authentication
+- **Cloud Sync**: All your data syncs across devices using Firebase
+- **Dark Mode**: Toggle between light and dark themes for comfortable use
 
-**Use Lovable**
+## Tech Stack
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/45138e11-8be2-45e7-8472-d710c1942ee5) and start prompting.
+- **Frontend**: React with TypeScript
+- **UI Components**: Shadcn UI with Tailwind CSS
+- **Routing**: React Router
+- **Authentication**: Firebase Authentication
+- **Database**: Firebase Firestore
+- **Hosting**: Firebase Hosting (optional)
 
-Changes made via Lovable will be committed automatically to this repo.
+## Getting Started
 
-**Use your preferred IDE**
+### Prerequisites
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+- Node.js (v16+)
+- npm or yarn
+- Firebase account
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Installation
 
-Follow these steps:
+1. Clone the repository
+   ```bash
+   git clone https://github.com/Dhruv-Tuteja/FocusFlow.git
+   cd FocusFlow
+   ```
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+2. Install dependencies
+   ```bash
+   npm install
+   ```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+3. Create a `.env` file in the root directory with your Firebase configuration:
+   ```
+   VITE_FIREBASE_API_KEY=your_api_key
+   VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
+   VITE_FIREBASE_PROJECT_ID=your_project_id
+   VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
+   VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+   VITE_FIREBASE_APP_ID=your_app_id
+   ```
 
-# Step 3: Install the necessary dependencies.
-npm i
+4. Start the development server
+   ```bash
+   npm run dev
+   ```
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+### Firebase Setup
+
+1. Create a new Firebase project at [https://console.firebase.google.com/](https://console.firebase.google.com/)
+2. Enable Authentication (Email/Password and Google providers)
+3. Create a Firestore database
+4. Add your web app to the Firebase project to get the configuration values
+5. Update your `.env` file with these values
+6. Add your app's domain to the authorized domains list in Firebase Authentication settings
+
+## Usage
+
+### Task Management
+- Add tasks with title, description, due date, and tags
+- Mark tasks as complete
+- Set recurring tasks (daily, weekly, monthly)
+- Filter tasks by date or status
+
+### Progress Tracking
+- View daily completion rates
+- Track your streak of consecutive days with completed tasks
+- Analyze weekly and monthly productivity trends
+
+### Profile
+- View statistics about your productivity
+- See your longest streaks
+- Analyze task completion patterns
+
+## Project Structure
+
+```
+/src
+  /components      # UI components
+  /contexts        # React contexts for state management
+  /hooks           # Custom React hooks
+  /lib             # Utility functions and Firebase setup
+  /pages           # Main application pages
+  /types           # TypeScript type definitions
+  /utils           # Helper utilities
+  App.tsx          # Main application component
 ```
 
-**Edit a file directly in GitHub**
+## Contributing
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-**Use GitHub Codespaces**
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## License
 
-## What technologies are used for this project?
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-This project is built with .
+## Acknowledgments
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/45138e11-8be2-45e7-8472-d710c1942ee5) and click on Share -> Publish.
-
-## I want to use a custom domain - is that possible?
-
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
+- [React](https://reactjs.org/)
+- [Shadcn UI](https://ui.shadcn.com/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [Firebase](https://firebase.google.com/)
+- [Vite](https://vitejs.dev/)
