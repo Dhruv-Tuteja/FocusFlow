@@ -266,6 +266,55 @@ const Index = () => {
         throw new Error('Failed to save task');
       }
       
+      // Immediately update progress data for today after adding a task
+      const today = getTodayDateString();
+      const todayTasksAfterAdd = updatedTasks.filter(t => 
+        t.dueDate === today || 
+        (t.recurrence && isTaskDueToday(t))
+      );
+      const completedTasksAfterAdd = todayTasksAfterAdd.filter(t => t.status === "completed");
+      const completionAfterAdd = todayTasksAfterAdd.length > 0 
+        ? completedTasksAfterAdd.length / todayTasksAfterAdd.length 
+        : 0;
+      
+      // Update today's progress in the progress array
+      const existingProgressEntry = progress.find(p => p.date === today);
+      let updatedProgress: DailyProgress[];
+      
+      if (existingProgressEntry) {
+        updatedProgress = progress.map(p =>
+          p.date === today
+            ? {
+                ...p,
+                tasksCompleted: completedTasksAfterAdd.length,
+                tasksPlanned: todayTasksAfterAdd.length,
+                completion: completionAfterAdd,
+                tasks: todayTasksAfterAdd,
+              }
+            : p
+        );
+      } else {
+        updatedProgress = [
+          ...progress,
+          {
+            date: today,
+            tasksCompleted: completedTasksAfterAdd.length,
+            tasksPlanned: todayTasksAfterAdd.length,
+            completion: completionAfterAdd,
+            tasks: todayTasksAfterAdd,
+          },
+        ];
+      }
+      
+      // Update state and save to Firebase
+      setProgress(updatedProgress);
+      await saveProgress(user.uid, updatedProgress);
+      
+      // Update UI state variables directly
+      setTodayTasks(todayTasksAfterAdd);
+      setTodayCompleted(completedTasksAfterAdd.length);
+      setTodayProgress(completionAfterAdd * 100);
+      
       toast({
         title: "Task added",
         description: `"${task.title}" has been added to your tasks.`,
@@ -336,6 +385,55 @@ const Index = () => {
         throw new Error('Failed to update task status');
       }
 
+      // Immediately update progress data for today after completing a task
+      const today = getTodayDateString();
+      const todayTasksAfterComplete = updatedTasks.filter(t => 
+        t.dueDate === today || 
+        (t.recurrence && isTaskDueToday(t))
+      );
+      const completedTasksAfterComplete = todayTasksAfterComplete.filter(t => t.status === "completed");
+      const completionAfterComplete = todayTasksAfterComplete.length > 0 
+        ? completedTasksAfterComplete.length / todayTasksAfterComplete.length 
+        : 0;
+      
+      // Update today's progress in the progress array
+      const existingProgressEntry = progress.find(p => p.date === today);
+      let updatedProgress: DailyProgress[];
+      
+      if (existingProgressEntry) {
+        updatedProgress = progress.map(p =>
+          p.date === today
+            ? {
+                ...p,
+                tasksCompleted: completedTasksAfterComplete.length,
+                tasksPlanned: todayTasksAfterComplete.length,
+                completion: completionAfterComplete,
+                tasks: todayTasksAfterComplete,
+              }
+            : p
+        );
+      } else {
+        updatedProgress = [
+          ...progress,
+          {
+            date: today,
+            tasksCompleted: completedTasksAfterComplete.length,
+            tasksPlanned: todayTasksAfterComplete.length,
+            completion: completionAfterComplete,
+            tasks: todayTasksAfterComplete,
+          },
+        ];
+      }
+      
+      // Update state and save to Firebase
+      setProgress(updatedProgress);
+      await saveProgress(user.uid, updatedProgress);
+      
+      // Update UI state variables directly
+      setTodayTasks(todayTasksAfterComplete);
+      setTodayCompleted(completedTasksAfterComplete.length);
+      setTodayProgress(completionAfterComplete * 100);
+      
       if (newStatus === "completed") {
         toast({
           title: "Task completed",

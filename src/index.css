@@ -36,10 +36,10 @@
 
     --radius: 0.5rem;
 
-    --task-empty: 0 0% 92%;
-    --task-low: 0 90% 75%;
-    --task-medium: 30 100% 65%;
-    --task-high: 142 80% 45%;
+    --task-empty: 220 14% 96%;
+    --task-low: 0 70% 70%;
+    --task-medium: 38 95% 65%;
+    --task-high: 142 76% 50%;
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -80,10 +80,10 @@
     --input: 215 27.9% 16.9%;
     --ring: 263.4 70% 50.4%;
 
-    --task-empty: 215 27.9% 20%;
-    --task-low: 0 80% 55%;
-    --task-medium: 30 90% 55%;
-    --task-high: 142 80% 45%;
+    --task-empty: 215 25% 20%;
+    --task-low: 0 70% 50%;
+    --task-medium: 38 95% 50%;
+    --task-high: 142 70% 40%;
   }
 
   * {

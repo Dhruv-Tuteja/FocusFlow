@@ -49,26 +49,41 @@ const Calendar: React.FC<CalendarProps> = ({ progress, streak, onDateSelect }) =
     const dateString = format(day, "yyyy-MM-dd");
     const foundProgress = progress.find((p) => p.date === dateString);
     
-    // Only log when we actually find progress data
-    if (foundProgress && foundProgress.completion > 0) {
-      console.log(`Found progress for ${dateString}: ${Math.round(foundProgress.completion * 100)}% (${foundProgress.tasksCompleted}/${foundProgress.tasksPlanned})`);
+    // Log all progress items to help debug
+    if (foundProgress) {
+      console.log(`Calendar found progress for ${dateString}:`, {
+        completion: foundProgress.completion,
+        tasksCompleted: foundProgress.tasksCompleted,
+        tasksPlanned: foundProgress.tasksPlanned,
+        completionPercent: Math.round(foundProgress.completion * 100)
+      });
     }
     
     return foundProgress;
   };
 
+  // Enhanced gradient style function with better color support
   const getProgressGradientStyle = (completion: number) => {
-    // No need to log every style calculation
+    console.log(`Getting gradient style for completion value: ${completion}`);
+    
+    // Ensure completion is a number between 0 and 1
+    if (typeof completion !== 'number' || isNaN(completion)) {
+      console.warn('Invalid completion value:', completion);
+      completion = 0;
+    }
+    
+    completion = Math.max(0, Math.min(1, completion));
+    
     if (completion === 0) {
-      return { background: 'linear-gradient(135deg, hsl(var(--task-empty)) 0%, hsl(0, 84%, 95%) 100%)' };
+      return { background: 'hsl(var(--task-empty))' }; // Simplified gradient
     }
     if (completion < 0.5) {
-      return { background: 'linear-gradient(135deg, hsl(var(--task-low)) 0%, hsl(0, 84%, 75%) 100%)' };
+      return { background: 'hsl(var(--task-low))' }; // Simplified gradient
     }
     if (completion < 1) {
-      return { background: 'linear-gradient(135deg, hsl(var(--task-medium)) 0%, hsl(40, 100%, 75%) 100%)' };
+      return { background: 'hsl(var(--task-medium))' }; // Simplified gradient
     }
-    return { background: 'linear-gradient(135deg, hsl(var(--task-high)) 0%, hsl(142, 76%, 55%) 100%)' };
+    return { background: 'hsl(var(--task-high))' }; // Simplified gradient
   };
 
   const handleDateClick = (dateString: string, dayProgress?: DailyProgress) => {
@@ -140,10 +155,12 @@ const Calendar: React.FC<CalendarProps> = ({ progress, streak, onDateSelect }) =
             
             // If we have progress data, use it to determine the color
             if (dayProgress) {
-              style = getProgressGradientStyle(dayProgress.completion);
-              // Only log significant progress
-              if (dayProgress.completion > 0) {
-                console.log(`Day ${dateString}: ${Math.round(dayProgress.completion * 100)}% progress`);
+              // Check if the completion value is present and valid
+              if (dayProgress.completion !== undefined && !isNaN(dayProgress.completion)) {
+                style = getProgressGradientStyle(dayProgress.completion);
+                console.log(`Applied style for ${dateString} with completion ${dayProgress.completion}:`, style);
+              } else {
+                console.warn(`Invalid completion value for ${dateString}:`, dayProgress.completion);
               }
             }
             
@@ -187,19 +204,19 @@ const Calendar: React.FC<CalendarProps> = ({ progress, streak, onDateSelect }) =
         <div className="flex justify-between mt-4 text-xs text-muted-foreground">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm" style={{ background: 'linear-gradient(135deg, hsl(var(--task-empty)) 0%, hsl(0, 84%, 95%) 100%)' }} />
+              <div className="w-3 h-3 rounded-sm" style={{ background: 'hsl(var(--task-empty))' }} />
               <span>No tasks</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm" style={{ background: 'linear-gradient(135deg, hsl(var(--task-low)) 0%, hsl(0, 84%, 75%) 100%)' }} />
+              <div className="w-3 h-3 rounded-sm" style={{ background: 'hsl(var(--task-low))' }} />
               <span>&lt; 50%</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm" style={{ background: 'linear-gradient(135deg, hsl(var(--task-medium)) 0%, hsl(40, 100%, 75%) 100%)' }} />
+              <div className="w-3 h-3 rounded-sm" style={{ background: 'hsl(var(--task-medium))' }} />
               <span>&lt; 100%</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm" style={{ background: 'linear-gradient(135deg, hsl(var(--task-high)) 0%, hsl(142, 76%, 55%) 100%)' }} />
+              <div className="w-3 h-3 rounded-sm" style={{ background: 'hsl(var(--task-high))' }} />
               <span>All tasks</span>
             </div>
           </div>
