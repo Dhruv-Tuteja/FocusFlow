@@ -24,6 +24,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from '@/contexts/ThemeContext';
 import { getUserData, saveTasks, saveProgress, saveStreak, saveBookmarks } from "@/lib/firebase";
+import { format } from "date-fns";
 
 const Index = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -158,18 +159,32 @@ const Index = () => {
         console.log('Updating daily progress...');
         const today = getTodayDateString();
         
+        // Debug logging
+        console.log('Current progress array:', progress);
+        console.log('Today\'s tasks:', todayTasks);
+        
         // Use the calculated todayTasks from the main component
         if (todayTasks.length === 0) {
+          console.log('No tasks for today, skipping progress update');
           return;
         }
 
         const completedTasks = todayTasks.filter(task => task.status === "completed");
         const completion = todayTasks.length > 0 ? completedTasks.length / todayTasks.length : 0;
+        
+        console.log('Completion calculation:', {
+          completed: completedTasks.length,
+          total: todayTasks.length,
+          completion: completion
+        });
 
         const existingProgress = progress.find(p => p.date === today);
+        console.log('Existing progress for today:', existingProgress);
+        
         let updatedProgress: DailyProgress[];
 
         if (existingProgress) {
+          console.log('Updating existing progress entry');
           updatedProgress = progress.map(p =>
             p.date === today
               ? {
@@ -182,6 +197,7 @@ const Index = () => {
               : p
           );
         } else {
+          console.log('Creating new progress entry for today');
           updatedProgress = [
             ...progress,
             {
@@ -194,10 +210,14 @@ const Index = () => {
           ];
         }
 
-        console.log('Setting updated progress:', updatedProgress.length);
+        console.log('Setting updated progress:', updatedProgress);
+        console.log('Progress count before update:', progress.length);
+        console.log('Progress count after update:', updatedProgress.length);
         setProgress(updatedProgress);
-        await saveProgress(user.uid, updatedProgress);
-
+        
+        const saveResult = await saveProgress(user.uid, updatedProgress);
+        console.log('Progress save result:', saveResult);
+        
         const updatedStreak = updateStreak(updatedProgress, streak);
         if (
           updatedStreak.currentStreak !== streak.currentStreak ||
@@ -453,6 +473,49 @@ const Index = () => {
     </DropdownMenuContent>
   );
 
+  // Determine if a task is due today based on recurrence pattern
+  const isTaskDueToday = (task: Task): boolean => {
+    if (!task.recurrence) return false;
+    
+    console.log('Checking recurrence for task:', task.title);
+    const { pattern, weekDays } = task.recurrence;
+    const today = new Date();
+    const dueDate = new Date(task.dueDate);
+    
+    // For "once" tasks, only due on the specific date
+    if (pattern === 'once') {
+      const isMatch = format(today, 'yyyy-MM-dd') === format(dueDate, 'yyyy-MM-dd');
+      console.log(`Task "${task.title}" is due once on ${format(dueDate, 'yyyy-MM-dd')}, today is ${format(today, 'yyyy-MM-dd')}, match: ${isMatch}`);
+      return isMatch;
+    }
+    
+    // For "daily" tasks, due every day after the start date
+    if (pattern === 'daily') {
+      const isAfterStart = today >= dueDate;
+      console.log(`Task "${task.title}" is daily, after start date: ${isAfterStart}`);
+      return isAfterStart;
+    }
+    
+    // For "weekly" tasks, due on specific days of the week
+    if (pattern === 'weekly' && weekDays) {
+      // Get day name and convert to lowercase (monday, tuesday, etc.)
+      const todayName = format(today, 'EEEE').toLowerCase();
+      // Check if the weekDays array includes today's name
+      const isDueToday = weekDays.includes(todayName as any) && today >= dueDate;
+      console.log(`Task "${task.title}" is weekly on ${weekDays.join(', ')}, today is ${todayName}, match: ${isDueToday}`);
+      return isDueToday;
+    }
+    
+    // For "monthly" tasks, due on the same day of each month
+    if (pattern === 'monthly') {
+      const isDueDayOfMonth = today.getDate() === dueDate.getDate() && today >= dueDate;
+      console.log(`Task "${task.title}" is monthly on day ${dueDate.getDate()}, today is day ${today.getDate()}, match: ${isDueDayOfMonth}`);
+      return isDueDayOfMonth;
+    }
+    
+    return false;
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -527,7 +590,7 @@ const Index = () => {
         </div>
 
         {/* Progress Card */}
-        {user && todayTasks.length > 0 && !selectedDate && (
+        {user && (
           <Card className="animate-scale-in mb-6">
             <CardHeader className="pb-2">
               <div className="flex justify-between items-center">

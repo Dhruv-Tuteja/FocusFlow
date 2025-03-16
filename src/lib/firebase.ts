@@ -45,6 +45,25 @@ googleProvider.setCustomParameters({
   prompt: 'select_account'
 });
 
+// Helper function to remove undefined values from objects before saving to Firestore
+const removeUndefinedValues = (obj: any): any => {
+  if (obj === null || obj === undefined) return null;
+  
+  if (Array.isArray(obj)) {
+    return obj.map(removeUndefinedValues);
+  }
+  
+  if (typeof obj === 'object') {
+    return Object.fromEntries(
+      Object.entries(obj)
+        .filter(([_, value]) => value !== undefined)
+        .map(([key, value]) => [key, removeUndefinedValues(value)])
+    );
+  }
+  
+  return obj;
+};
+
 // Firestore helper functions
 export const saveUserData = async (userId: string, data: Record<string, unknown>) => {
   try {
@@ -115,6 +134,10 @@ export const saveTasks = async (userId: string, tasks: Task[]) => {
       return { success: false, error: 'User ID is required' };
     }
     
+    // Remove undefined values from tasks
+    const cleanedTasks = removeUndefinedValues(tasks);
+    console.log('Cleaned tasks for Firestore:', cleanedTasks.length);
+    
     // Check if user document exists
     const userDoc = await getDoc(doc(db, 'users', userId));
     
@@ -122,7 +145,7 @@ export const saveTasks = async (userId: string, tasks: Task[]) => {
       // Create the document with tasks if it doesn't exist
       console.log('Creating new user document with tasks');
       await setDoc(doc(db, 'users', userId), { 
-        tasks,
+        tasks: cleanedTasks,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
@@ -130,7 +153,7 @@ export const saveTasks = async (userId: string, tasks: Task[]) => {
       // Update existing document
       console.log('Updating existing user document with tasks');
       await updateDoc(doc(db, 'users', userId), { 
-        tasks,
+        tasks: cleanedTasks,
         updatedAt: serverTimestamp()
       });
     }
@@ -163,6 +186,9 @@ export const saveProgress = async (userId: string, progress: DailyProgress[]) =>
       return { success: false, error: 'User ID is required' };
     }
     
+    // Remove undefined values from progress
+    const cleanedProgress = removeUndefinedValues(progress);
+    
     // Check if user document exists
     const userDoc = await getDoc(doc(db, 'users', userId));
     
@@ -170,7 +196,7 @@ export const saveProgress = async (userId: string, progress: DailyProgress[]) =>
       // Create the document with progress if it doesn't exist
       console.log('Creating new user document with progress data');
       await setDoc(doc(db, 'users', userId), { 
-        progress,
+        progress: cleanedProgress,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
@@ -178,7 +204,7 @@ export const saveProgress = async (userId: string, progress: DailyProgress[]) =>
       // Update existing document
       console.log('Updating existing user document with progress data');
       await updateDoc(doc(db, 'users', userId), { 
-        progress,
+        progress: cleanedProgress,
         updatedAt: serverTimestamp()
       });
     }
@@ -204,12 +230,15 @@ export const saveProgress = async (userId: string, progress: DailyProgress[]) =>
 // Streak
 export const saveStreak = async (userId: string, streak: StreakData) => {
   try {
-    console.log('Saving streak to Firestore:', streak, 'for user', userId);
+    console.log('Saving streak data to Firestore for user', userId);
     
     if (!userId) {
       console.error('Cannot save streak: User ID is null or undefined');
       return { success: false, error: 'User ID is required' };
     }
+    
+    // Remove undefined values from streak
+    const cleanedStreak = removeUndefinedValues(streak);
     
     // Check if user document exists
     const userDoc = await getDoc(doc(db, 'users', userId));
@@ -218,7 +247,7 @@ export const saveStreak = async (userId: string, streak: StreakData) => {
       // Create the document with streak if it doesn't exist
       console.log('Creating new user document with streak data');
       await setDoc(doc(db, 'users', userId), { 
-        streak,
+        streak: cleanedStreak,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
@@ -226,7 +255,7 @@ export const saveStreak = async (userId: string, streak: StreakData) => {
       // Update existing document
       console.log('Updating existing user document with streak data');
       await updateDoc(doc(db, 'users', userId), { 
-        streak,
+        streak: cleanedStreak,
         updatedAt: serverTimestamp()
       });
     }
@@ -252,22 +281,32 @@ export const saveStreak = async (userId: string, streak: StreakData) => {
 // Bookmarks
 export const saveBookmarks = async (userId: string, bookmarks: Bookmark[]) => {
   try {
-    console.log('Saving bookmarks to Firestore:', bookmarks.length);
+    console.log('Saving bookmarks to Firestore:', bookmarks.length, 'bookmarks for user', userId);
+    
+    if (!userId) {
+      console.error('Cannot save bookmarks: User ID is null or undefined');
+      return { success: false, error: 'User ID is required' };
+    }
+    
+    // Remove undefined values from bookmarks
+    const cleanedBookmarks = removeUndefinedValues(bookmarks);
     
     // Check if user document exists
     const userDoc = await getDoc(doc(db, 'users', userId));
     
     if (!userDoc.exists()) {
       // Create the document with bookmarks if it doesn't exist
+      console.log('Creating new user document with bookmarks');
       await setDoc(doc(db, 'users', userId), { 
-        bookmarks,
+        bookmarks: cleanedBookmarks,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
     } else {
       // Update existing document
+      console.log('Updating existing user document with bookmarks');
       await updateDoc(doc(db, 'users', userId), { 
-        bookmarks,
+        bookmarks: cleanedBookmarks,
         updatedAt: serverTimestamp()
       });
     }
