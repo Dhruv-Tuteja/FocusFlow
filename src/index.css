@@ -104,22 +104,6 @@
     @apply hover:scale-105 hover:shadow-md active:scale-95;
   }
 
-  .day-empty {
-    @apply bg-task-empty;
-  }
-
-  .day-low {
-    @apply bg-task-low;
-  }
-  
-  .day-medium {
-    @apply bg-task-medium;
-  }
-  
-  .day-high {
-    @apply bg-task-high;
-  }
-
   /* Animations */
   .task-enter {
     @apply animate-slide-in;

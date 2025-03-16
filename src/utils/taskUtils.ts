@@ -1,4 +1,5 @@
-import { Task, DailyProgress, StreakData, TaskTag } from "@/types/task";
+
+import { Task, DailyProgress, StreakData, TaskTag, UserProfile } from "@/types/task";
 
 // Save tasks to localStorage
 export const saveTasks = (tasks: Task[]) => {
@@ -39,6 +40,28 @@ export const loadStreak = (): StreakData => {
       };
 };
 
+// Save user profile to localStorage
+export const saveUserProfile = (profile: UserProfile) => {
+  localStorage.setItem("userProfile", JSON.stringify(profile));
+};
+
+// Load user profile from localStorage
+export const loadUserProfile = (): UserProfile | null => {
+  const profile = localStorage.getItem("userProfile");
+  return profile ? JSON.parse(profile) : null;
+};
+
+// Save profiles to localStorage
+export const saveProfiles = (profiles: UserProfile[]) => {
+  localStorage.setItem("profiles", JSON.stringify(profiles));
+};
+
+// Load profiles from localStorage
+export const loadProfiles = (): UserProfile[] => {
+  const profiles = localStorage.getItem("profiles");
+  return profiles ? JSON.parse(profiles) : [];
+};
+
 // Save tags to localStorage
 export const saveTags = (tags: TaskTag[]) => {
   localStorage.setItem("tags", JSON.stringify(tags));
@@ -66,27 +89,6 @@ export const generateId = () => {
   return Math.random().toString(36).substring(2, 11);
 };
 
-// Format time from seconds to MM:SS
-export const formatTime = (seconds: number): string => {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-};
-
-// Format time from seconds to hours and minutes
-export const formatTimeHoursMinutes = (seconds: number): string => {
-  if (seconds < 60) return `${seconds}s`;
-  
-  const mins = Math.floor(seconds / 60);
-  if (mins < 60) return `${mins}m`;
-  
-  const hours = Math.floor(mins / 60);
-  const remainingMins = mins % 60;
-  
-  if (remainingMins === 0) return `${hours}h`;
-  return `${hours}h ${remainingMins}m`;
-};
-
 // Get today's date in YYYY-MM-DD format
 export const getTodayDateString = (): string => {
   return new Date().toISOString().split("T")[0];
@@ -106,10 +108,12 @@ export const getProgressColorClass = (completion: number): string => {
 };
 
 // Update streak information based on daily progress
+// Modified to only count days with 100% completion
 export const updateStreak = (progress: DailyProgress[], prevStreak: StreakData): StreakData => {
   const today = getTodayDateString();
   const todayProgress = progress.find(p => p.date === today);
   
+  // Only continue streak if ALL tasks were completed (completion === 1)
   if (!todayProgress || todayProgress.completion < 1) {
     // No completed tasks today, check if streak is broken
     if (prevStreak.lastCompletionDate) {

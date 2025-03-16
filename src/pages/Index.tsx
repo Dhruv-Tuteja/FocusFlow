@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect } from "react";
-import { format } from "date-fns";
 import TaskForm from "@/components/TaskForm";
 import TaskList from "@/components/TaskList";
 import Calendar from "@/components/Calendar";
-import { Task, DailyProgress, StreakData, TaskTag } from "@/types/task";
+import UserProfile from "@/components/UserProfile";
+import { Task, DailyProgress, StreakData, TaskTag, UserProfile as UserProfileType } from "@/types/task";
 import {
   loadTasks,
   saveTasks,
@@ -14,13 +14,16 @@ import {
   saveStreak,
   loadTags,
   saveTags,
+  loadProfiles,
+  saveProfiles,
+  loadUserProfile,
+  saveUserProfile,
   generateId,
   getTodayDateString,
   updateStreak,
 } from "@/utils/taskUtils";
 import { CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
@@ -32,7 +35,20 @@ const Index = () => {
     lastCompletionDate: null,
   });
   const [tags, setTags] = useState<TaskTag[]>([]);
+  const [profiles, setProfiles] = useState<UserProfileType[]>([]);
+  const [currentUser, setCurrentUser] = useState<UserProfileType | null>(null);
+  const [darkMode, setDarkMode] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const { toast } = useToast();
+
+  // Apply dark mode class
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, [darkMode]);
 
   // Load data from localStorage on initial render
   useEffect(() => {
@@ -40,30 +56,18 @@ const Index = () => {
     const storedProgress = loadProgress();
     const storedStreak = loadStreak();
     const storedTags = loadTags();
+    const storedProfiles = loadProfiles();
+    const storedUser = loadUserProfile();
 
     setTasks(storedTasks);
     setProgress(storedProgress);
     setStreak(storedStreak);
     setTags(storedTags);
-
-    // Resume active timers
-    const now = Date.now();
-    const updatedTasks = storedTasks.map(task => {
-      if (task.isTimerActive && task.timerStartedAt) {
-        // Calculate time elapsed since timer started
-        const elapsedSeconds = Math.floor((now - task.timerStartedAt) / 1000);
-        return {
-          ...task,
-          timeSpent: task.timeSpent + elapsedSeconds,
-          timerStartedAt: now,
-        };
-      }
-      return task;
-    });
-
-    if (JSON.stringify(updatedTasks) !== JSON.stringify(storedTasks)) {
-      setTasks(updatedTasks);
-      saveTasks(updatedTasks);
+    setProfiles(storedProfiles);
+    
+    if (storedUser) {
+      setCurrentUser(storedUser);
+      setDarkMode(storedUser.darkMode);
     }
   }, []);
 
@@ -95,6 +99,7 @@ const Index = () => {
               tasksCompleted: completedTasks.length,
               tasksPlanned: todayTasks.length,
               completion,
+              tasks: todayTasks,
             }
           : p
       );
@@ -106,6 +111,7 @@ const Index = () => {
           tasksCompleted: completedTasks.length,
           tasksPlanned: todayTasks.length,
           completion,
+          tasks: todayTasks,
         },
       ];
     }
@@ -148,7 +154,6 @@ const Index = () => {
         ? {
             ...t,
             status: newStatus,
-            isTimerActive: newStatus === "completed" ? false : t.isTimerActive,
           }
         : t
     );
@@ -179,8 +184,66 @@ const Index = () => {
     });
   };
 
-  const today = new Date();
-  const formattedDate = format(today, "EEEE, MMMM d, yyyy");
+  const handleLogin = (profile: UserProfileType) => {
+    setCurrentUser(profile);
+    setDarkMode(profile.darkMode);
+    saveUserProfile(profile);
+    
+    toast({
+      title: "Welcome back",
+      description: `Logged in as ${profile.name}`,
+    });
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem("userProfile");
+    
+    toast({
+      title: "Logged out",
+      description: "You have been logged out successfully",
+    });
+  };
+
+  const handleCreateProfile = (profile: UserProfileType) => {
+    const updatedProfiles = [...profiles, profile];
+    setProfiles(updatedProfiles);
+    saveProfiles(updatedProfiles);
+    setCurrentUser(profile);
+    saveUserProfile(profile);
+    
+    toast({
+      title: "Profile created",
+      description: `Welcome, ${profile.name}!`,
+    });
+  };
+
+  const handleToggleDarkMode = () => {
+    const newDarkMode = !darkMode;
+    setDarkMode(newDarkMode);
+    
+    if (currentUser) {
+      const updatedUser = { ...currentUser, darkMode: newDarkMode };
+      setCurrentUser(updatedUser);
+      saveUserProfile(updatedUser);
+      
+      // Also update in profiles array
+      const updatedProfiles = profiles.map(p => 
+        p.id === currentUser.id ? updatedUser : p
+      );
+      setProfiles(updatedProfiles);
+      saveProfiles(updatedProfiles);
+    }
+  };
+
+  const handleDateSelect = (date: string, selectedTasks: Task[]) => {
+    setSelectedDate(date);
+  };
+
+  const handleBackToToday = () => {
+    setSelectedDate(null);
+  };
+
   const todayString = getTodayDateString();
   const todayTasks = tasks.filter(task => task.dueDate === todayString);
   const todayCompleted = todayTasks.filter(task => task.status === "completed").length;
@@ -189,15 +252,41 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <div className="container px-4 py-8 max-w-6xl">
+        <UserProfile 
+          currentUser={currentUser}
+          profiles={profiles}
+          darkMode={darkMode}
+          onLogin={handleLogin}
+          onLogout={handleLogout}
+          onCreateProfile={handleCreateProfile}
+          onToggleDarkMode={handleToggleDarkMode}
+        />
+
         <header className="text-center mb-12 animate-fade-in">
           <h1 className="text-4xl font-bold mb-2">Focus Flow</h1>
-          <p className="text-muted-foreground">{formattedDate}</p>
+          {selectedDate ? (
+            <div>
+              <p className="text-muted-foreground">
+                Viewing tasks for {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              </p>
+              <button 
+                className="text-primary text-sm mt-2"
+                onClick={handleBackToToday}
+              >
+                Back to today
+              </button>
+            </div>
+          ) : (
+            <p className="text-muted-foreground">
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </p>
+          )}
         </header>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Task list column */}
           <div className="col-span-1 md:col-span-2 space-y-6">
-            {todayTasks.length > 0 && (
+            {todayTasks.length > 0 && !selectedDate && (
               <Card className="animate-scale-in">
                 <CardHeader className="pb-2">
                   <div className="flex justify-between items-center">
@@ -230,10 +319,13 @@ const Index = () => {
               </Card>
             )}
 
-            <TaskForm onAddTask={handleAddTask} availableTags={tags} />
+            {!selectedDate && (
+              <TaskForm onAddTask={handleAddTask} availableTags={tags} />
+            )}
             
             <TaskList
               tasks={tasks}
+              selectedDate={selectedDate || undefined}
               onUpdateTask={handleUpdateTask}
               onCompleteTask={handleCompleteTask}
               onDeleteTask={handleDeleteTask}
@@ -242,7 +334,11 @@ const Index = () => {
 
           {/* Calendar and stats column */}
           <div className="space-y-6">
-            <Calendar progress={progress} streak={streak} />
+            <Calendar 
+              progress={progress} 
+              streak={streak} 
+              onDateSelect={handleDateSelect}
+            />
           </div>
         </div>
       </div>

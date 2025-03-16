@@ -2,8 +2,7 @@
 import React, { useState } from "react";
 import { ChevronLeft, ChevronRight, Flame } from "lucide-react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from "date-fns";
-import { DailyProgress, StreakData } from "@/types/task";
-import { getProgressColorClass } from "@/utils/taskUtils";
+import { DailyProgress, StreakData, Task } from "@/types/task";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,9 +16,10 @@ import {
 interface CalendarProps {
   progress: DailyProgress[];
   streak: StreakData;
+  onDateSelect: (date: string, tasks: Task[]) => void;
 }
 
-const Calendar: React.FC<CalendarProps> = ({ progress, streak }) => {
+const Calendar: React.FC<CalendarProps> = ({ progress, streak, onDateSelect }) => {
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
 
   const nextMonth = () => {
@@ -49,6 +49,27 @@ const Calendar: React.FC<CalendarProps> = ({ progress, streak }) => {
   const findProgressForDay = (day: Date): DailyProgress | undefined => {
     const dateString = format(day, "yyyy-MM-dd");
     return progress.find((p) => p.date === dateString);
+  };
+
+  const getProgressGradientStyle = (completion: number) => {
+    if (completion === 0) {
+      return { background: 'linear-gradient(135deg, hsl(var(--task-empty)) 0%, hsl(0, 84%, 95%) 100%)' };
+    }
+    if (completion < 0.5) {
+      return { background: 'linear-gradient(135deg, hsl(var(--task-low)) 0%, hsl(0, 84%, 75%) 100%)' };
+    }
+    if (completion < 1) {
+      return { background: 'linear-gradient(135deg, hsl(var(--task-medium)) 0%, hsl(40, 100%, 75%) 100%)' };
+    }
+    return { background: 'linear-gradient(135deg, hsl(var(--task-high)) 0%, hsl(142, 76%, 55%) 100%)' };
+  };
+
+  const handleDateClick = (dateString: string, dayProgress?: DailyProgress) => {
+    if (dayProgress) {
+      onDateSelect(dateString, dayProgress.tasks || []);
+    } else {
+      onDateSelect(dateString, []);
+    }
   };
 
   return (
@@ -105,19 +126,21 @@ const Calendar: React.FC<CalendarProps> = ({ progress, streak }) => {
 
           {monthDays.map((day) => {
             const dayProgress = findProgressForDay(day);
-            const colorClass = dayProgress 
-              ? getProgressColorClass(dayProgress.completion) 
-              : "bg-gray-100 dark:bg-gray-800";
+            const dateString = format(day, "yyyy-MM-dd");
+            const style = dayProgress 
+              ? getProgressGradientStyle(dayProgress.completion) 
+              : { background: 'hsl(var(--muted))' };
               
             return (
-              <TooltipProvider key={format(day, "yyyy-MM-dd")}>
+              <TooltipProvider key={dateString}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div 
                       className={cn(
-                        "aspect-square rounded-md flex items-center justify-center text-xs day-cell",
-                        colorClass
+                        "aspect-square rounded-md flex items-center justify-center text-xs day-cell cursor-pointer",
                       )}
+                      style={style}
+                      onClick={() => handleDateClick(dateString, dayProgress)}
                     >
                       {format(day, "d")}
                     </div>
@@ -148,19 +171,19 @@ const Calendar: React.FC<CalendarProps> = ({ progress, streak }) => {
         <div className="flex justify-between mt-4 text-xs text-muted-foreground">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm day-empty" />
+              <div className="w-3 h-3 rounded-sm" style={{ background: 'linear-gradient(135deg, hsl(var(--task-empty)) 0%, hsl(0, 84%, 95%) 100%)' }} />
               <span>No tasks</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm day-low" />
+              <div className="w-3 h-3 rounded-sm" style={{ background: 'linear-gradient(135deg, hsl(var(--task-low)) 0%, hsl(0, 84%, 75%) 100%)' }} />
               <span>&lt; 50%</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm day-medium" />
+              <div className="w-3 h-3 rounded-sm" style={{ background: 'linear-gradient(135deg, hsl(var(--task-medium)) 0%, hsl(40, 100%, 75%) 100%)' }} />
               <span>&lt; 100%</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm day-high" />
+              <div className="w-3 h-3 rounded-sm" style={{ background: 'linear-gradient(135deg, hsl(var(--task-high)) 0%, hsl(142, 76%, 55%) 100%)' }} />
               <span>All tasks</span>
             </div>
           </div>

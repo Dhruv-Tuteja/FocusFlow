@@ -1,9 +1,7 @@
 
 import React, { useState } from "react";
-import { Check, Clock, Edit, Trash, Tag, MoreVertical } from "lucide-react";
+import { Check, Edit, Trash, Tag, MoreVertical } from "lucide-react";
 import { Task } from "@/types/task";
-import TaskTimer from "./TaskTimer";
-import { formatTimeHoursMinutes } from "@/utils/taskUtils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -25,6 +23,7 @@ import { cn } from "@/lib/utils";
 
 interface TaskListProps {
   tasks: Task[];
+  selectedDate?: string;
   onUpdateTask: (task: Task) => void;
   onCompleteTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
@@ -32,58 +31,31 @@ interface TaskListProps {
 
 const TaskList: React.FC<TaskListProps> = ({
   tasks,
+  selectedDate,
   onUpdateTask,
   onCompleteTask,
   onDeleteTask,
 }) => {
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
-  const handleTimerToggle = (taskId: string) => {
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task) return;
-
-    onUpdateTask({
-      ...task,
-      isTimerActive: !task.isTimerActive,
-      timerStartedAt: !task.isTimerActive ? Date.now() : undefined,
-    });
-  };
-
-  const handleTimerTick = (taskId: string, seconds: number) => {
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task) return;
-
-    onUpdateTask({
-      ...task,
-      timeSpent: seconds,
-    });
-  };
-
-  const handleTimerReset = (taskId: string) => {
-    const task = tasks.find((t) => t.id === taskId);
-    if (!task) return;
-
-    onUpdateTask({
-      ...task,
-      timeSpent: 0,
-      isTimerActive: false,
-      timerStartedAt: undefined,
-    });
-  };
-
   const toggleTaskExpand = (taskId: string) => {
     setExpandedTaskId(expandedTaskId === taskId ? null : taskId);
   };
 
-  const todayTasks = tasks.filter(
+  // Filter tasks based on selected date if provided
+  const displayTasks = selectedDate 
+    ? tasks.filter(task => task.dueDate === selectedDate)
+    : tasks;
+
+  const todayTasks = displayTasks.filter(
     (task) => task.status !== "completed" && new Date(task.dueDate) <= new Date()
   );
   
-  const futureTasks = tasks.filter(
+  const futureTasks = displayTasks.filter(
     (task) => task.status !== "completed" && new Date(task.dueDate) > new Date()
   );
   
-  const completedTasks = tasks.filter(
+  const completedTasks = displayTasks.filter(
     (task) => task.status === "completed"
   );
 
@@ -145,8 +117,7 @@ const TaskList: React.FC<TaskListProps> = ({
               
               <div className="flex items-center gap-2">
                 {task.estimatedMinutes && (
-                  <span className="text-sm text-muted-foreground flex items-center">
-                    <Clock size={14} className="mr-1" />
+                  <span className="text-sm text-muted-foreground">
                     {task.estimatedMinutes}m
                   </span>
                 )}
@@ -186,37 +157,36 @@ const TaskList: React.FC<TaskListProps> = ({
             )}
           </div>
         </div>
-        
-        {isExpanded && (
-          <div className="px-4 pb-4 pt-1 animate-slide-in">
-            <div className="bg-muted/50 rounded-lg p-3">
-              <TaskTimer
-                isActive={task.isTimerActive}
-                initialSeconds={task.timeSpent}
-                onToggle={() => handleTimerToggle(task.id)}
-                onReset={() => handleTimerReset(task.id)}
-                onTick={(seconds) => handleTimerTick(task.id, seconds)}
-              />
-              
-              {task.timeSpent > 0 && !task.isTimerActive && (
-                <div className="text-sm text-muted-foreground mt-2">
-                  Time logged: {formatTimeHoursMinutes(task.timeSpent)}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </Card>
     );
   };
 
   return (
     <div>
-      {renderTaskList(todayTasks, "Today")}
-      {renderTaskList(futureTasks, "Upcoming")}
+      {selectedDate && (
+        <h2 className="text-xl font-bold mb-4">
+          Tasks for {format(new Date(selectedDate), "MMMM d, yyyy")}
+        </h2>
+      )}
+      {renderTaskList(todayTasks, selectedDate ? "Incomplete" : "Today")}
+      {!selectedDate && renderTaskList(futureTasks, "Upcoming")}
       {renderTaskList(completedTasks, "Completed")}
+      {displayTasks.length === 0 && (
+        <div className="text-center py-8 text-muted-foreground">
+          {selectedDate ? "No tasks for this date" : "No tasks available"}
+        </div>
+      )}
     </div>
   );
 };
+
+// Helper function to format date
+function format(date: Date, formatStr: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  }).format(date);
+}
 
 export default TaskList;
