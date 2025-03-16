@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import TaskForm from "@/components/TaskForm";
 import TaskList from "@/components/TaskList";
@@ -295,41 +296,46 @@ const Index = () => {
           </div>
           
           <div className="flex-1">
-            <UserProfile 
-              currentUser={currentUser}
-              profiles={profiles}
-              darkMode={darkMode}
-              onLogin={handleLogin}
-              onLogout={handleLogout}
-              onCreateProfile={handleCreateProfile}
-              onToggleDarkMode={handleToggleDarkMode}
-            />
-
-            <header className="text-center mb-12 animate-fade-in">
-              {selectedDate ? (
-                <div>
+            <div className="flex justify-between items-center mb-4">
+              <div></div> {/* Empty div for spacing */}
+              
+              <div className="text-center">
+                <h1 className="text-3xl font-bold mb-2">Focus Flow</h1>
+                {selectedDate ? (
+                  <div>
+                    <p className="text-muted-foreground">
+                      Viewing tasks for {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                    </p>
+                    <button 
+                      className="text-primary text-sm mt-1"
+                      onClick={handleBackToToday}
+                    >
+                      Back to today
+                    </button>
+                  </div>
+                ) : (
                   <p className="text-muted-foreground">
-                    Viewing tasks for {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                    {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                   </p>
-                  <button 
-                    className="text-primary text-sm mt-2"
-                    onClick={handleBackToToday}
-                  >
-                    Back to today
-                  </button>
-                </div>
-              ) : (
-                <p className="text-muted-foreground">
-                  {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                </p>
-              )}
-            </header>
+                )}
+              </div>
+              
+              <UserProfile 
+                currentUser={currentUser}
+                profiles={profiles}
+                darkMode={darkMode}
+                onLogin={handleLogin}
+                onLogout={handleLogout}
+                onCreateProfile={handleCreateProfile}
+                onToggleDarkMode={handleToggleDarkMode}
+              />
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {/* Task list column */}
-              <div className="col-span-1 md:col-span-2 space-y-6">
+              <div className="col-span-1 md:col-span-3 md:order-2">
                 {todayTasks.length > 0 && !selectedDate && (
-                  <Card className="animate-scale-in">
+                  <Card className="animate-scale-in mb-6">
                     <CardHeader className="pb-2">
                       <div className="flex justify-between items-center">
                         <CardTitle className="text-lg font-medium">Today's Progress</CardTitle>
@@ -361,26 +367,30 @@ const Index = () => {
                   </Card>
                 )}
 
-                {!selectedDate && (
-                  <TaskForm onAddTask={handleAddTask} availableTags={tags} />
-                )}
-                
-                <TaskList
-                  tasks={tasks}
-                  selectedDate={selectedDate || undefined}
-                  onUpdateTask={handleUpdateTask}
-                  onCompleteTask={handleCompleteTask}
-                  onDeleteTask={handleDeleteTask}
-                />
-              </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                  <div className="col-span-1 md:col-span-2">
+                    {!selectedDate && (
+                      <TaskForm onAddTask={handleAddTask} availableTags={tags} />
+                    )}
+                    
+                    <TaskList
+                      tasks={tasks}
+                      selectedDate={selectedDate || undefined}
+                      onUpdateTask={handleUpdateTask}
+                      onCompleteTask={handleCompleteTask}
+                      onDeleteTask={handleDeleteTask}
+                    />
+                  </div>
 
-              {/* Calendar and stats column */}
-              <div className="space-y-6">
-                <Calendar 
-                  progress={progress} 
-                  streak={streak} 
-                  onDateSelect={handleDateSelect}
-                />
+                  {/* Calendar moved to right side, below bookmarks in the layout */}
+                  <div className="col-span-1">
+                    <Calendar 
+                      progress={progress} 
+                      streak={streak} 
+                      onDateSelect={handleDateSelect}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
