@@ -246,7 +246,14 @@ export const generateId = () => {
 
 // Get today's date in YYYY-MM-DD format
 export const getTodayDateString = (): string => {
-  return new Date().toISOString().split("T")[0];
+  // This should return today's actual date, not a hardcoded value
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+  const day = String(now.getDate()).padStart(2, '0');
+  
+  console.log(`Current date calculation: ${year}-${month}-${day}`);
+  return `${year}-${month}-${day}`;
 };
 
 // Check if a date is today

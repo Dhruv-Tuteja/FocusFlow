@@ -185,6 +185,13 @@ export const saveProgress = async (userId: string, progress: DailyProgress[]) =>
       return { success: false, error: 'User ID is required' };
     }
     
+    // Check for hardcoded dates to help debug
+    const march162025 = progress.find(p => p.date === '2025-03-16');
+    if (march162025) {
+      console.warn('Warning: Found hardcoded date 2025-03-16 in progress data:', march162025);
+      console.warn('Entire progress data array:', progress);
+    }
+    
     // Log the raw progress data for debugging
     console.log('Progress data to save:', JSON.stringify(progress));
     

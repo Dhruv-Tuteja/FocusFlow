@@ -49,6 +49,10 @@ const Index = () => {
   // Load user data when user changes
   useEffect(() => {
     const loadUserData = async () => {
+      // Log the current date at initialization
+      const currentDate = getTodayDateString();
+      console.log('Current date at app initialization:', currentDate);
+      
       if (!user) {
         // Reset all data if no user is logged in
         setTasks([]);
