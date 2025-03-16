@@ -98,6 +98,36 @@ const Index = () => {
           const loadedBookmarks = result.data.bookmarks || [];
           setBookmarks(loadedBookmarks);
           
+          // Initialize today's progress data if we have tasks but no progress for today
+          const today = getTodayDateString();
+          const todaysTasksFromLoaded = loadedTasks.filter((task: Task) => 
+            task.dueDate === today || 
+            (task.recurrence && isTaskDueToday(task))
+          );
+          
+          // If we have tasks for today but no progress entry, create one immediately
+          if (todaysTasksFromLoaded.length > 0 && !loadedProgress.some((p: DailyProgress) => p.date === today)) {
+            console.log('We have tasks for today but no progress entry. Creating one now.');
+            
+            const todayCompleted = todaysTasksFromLoaded.filter((t: Task) => t.status === "completed").length;
+            const todayCompletion = todayCompleted / todaysTasksFromLoaded.length;
+            
+            const newProgressEntry: DailyProgress = {
+              date: today,
+              tasksCompleted: todayCompleted,
+              tasksPlanned: todaysTasksFromLoaded.length,
+              completion: todayCompletion,
+              tasks: todaysTasksFromLoaded
+            };
+            
+            const updatedProgress = [...loadedProgress, newProgressEntry];
+            console.log('Immediately saving new progress entry:', newProgressEntry);
+            setProgress(updatedProgress);
+            
+            // Save the new progress entry to Firestore
+            await saveProgress(user.uid, updatedProgress);
+          }
+          
           console.log('User data set successfully');
         } else {
           console.error('Failed to load user data:', result);

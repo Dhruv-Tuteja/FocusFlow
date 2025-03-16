@@ -74,16 +74,22 @@ const Calendar: React.FC<CalendarProps> = ({ progress, streak, onDateSelect }) =
     
     completion = Math.max(0, Math.min(1, completion));
     
+    // Log specific color stops for debugging
     if (completion === 0) {
-      return { background: 'hsl(var(--task-empty))' }; // Simplified gradient
+      console.log('Using empty task color style');
+      return { background: 'hsl(var(--task-empty))' };
     }
     if (completion < 0.5) {
-      return { background: 'hsl(var(--task-low))' }; // Simplified gradient
+      console.log('Using low completion color style');
+      return { background: 'hsl(var(--task-low))' };
     }
     if (completion < 1) {
-      return { background: 'hsl(var(--task-medium))' }; // Simplified gradient
+      console.log('Using medium completion color style');
+      return { background: 'hsl(var(--task-medium))' };
     }
-    return { background: 'hsl(var(--task-high))' }; // Simplified gradient
+    
+    console.log('Using high (full) completion color style');
+    return { background: 'hsl(var(--task-high))' };
   };
 
   const handleDateClick = (dateString: string, dayProgress?: DailyProgress) => {
