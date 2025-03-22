@@ -278,55 +278,62 @@ const Index = () => {
 
       try {
         console.log('Updating daily progress...');
-    const today = getTodayDateString();
+        const today = getTodayDateString();
         
         // Debug logging
         console.log('Current progress array:', progress);
-        console.log('Today\'s tasks:', todayTasks);
         
-        // Create a progress entry even if there are no tasks
-        // This ensures the activity graph shows data for every day the user logs in
-        let completedTasks = todayTasks.filter(task => task.status === "completed");
-        let completion = todayTasks.length > 0 ? completedTasks.length / todayTasks.length : 0;
+        // For the activity graph, we need to consider ALL tasks scheduled for today
+        // not just the filtered ones based on visibility
+        const allTodayTasks = tasks.filter(task => 
+          task.dueDate === today || 
+          (task.recurrence && isTaskDueToday(task))
+        );
+        
+        console.log('All tasks for today (for progress calculation):', allTodayTasks);
+        
+        // Calculate completion based on ALL tasks for today, not just visible ones
+        let completedTasks = allTodayTasks.filter(task => task.status === "completed");
+        let completion = allTodayTasks.length > 0 ? completedTasks.length / allTodayTasks.length : 0;
         
         console.log('Completion calculation:', {
           completed: completedTasks.length,
-          total: todayTasks.length,
+          total: allTodayTasks.length,
           completion: completion
         });
 
-    const existingProgress = progress.find(p => p.date === today);
+        const existingProgress = progress.find(p => p.date === today);
         console.log('Existing progress for today:', existingProgress);
         
-    let updatedProgress: DailyProgress[];
+        let updatedProgress: DailyProgress[];
 
-    if (existingProgress) {
+        if (existingProgress) {
           console.log('Updating existing progress entry');
-      updatedProgress = progress.map(p =>
-        p.date === today
-          ? {
-              ...p,
-              tasksCompleted: completedTasks.length,
-              tasksPlanned: todayTasks.length,
-              completion,
-              tasks: todayTasks,
-            }
-          : p
-      );
-    } else {
+          updatedProgress = progress.map(p =>
+            p.date === today
+              ? {
+                  ...p,
+                  tasksCompleted: completedTasks.length,
+                  tasksPlanned: allTodayTasks.length,
+                  completion,
+                  tasks: allTodayTasks,
+                }
+              : p
+          );
+        } else {
           console.log('Creating new progress entry for today');
           // Always create an entry for today, even with zero tasks
-      updatedProgress = [
-        ...progress,
-        {
-          date: today,
-          tasksCompleted: completedTasks.length,
-              tasksPlanned: todayTasks.length || 0,
-          completion,
-          tasks: todayTasks,
-        },
-      ];
-    }
+          updatedProgress = [
+            ...progress,
+            {
+              date: today,
+              tasksCompleted: completedTasks.length,
+              tasksPlanned: allTodayTasks.length || 0,
+              completion,
+              tasks: allTodayTasks,
+            },
+          ];
+        }
 
         console.log('Setting updated progress:', updatedProgress);
         console.log('Progress count before update:', progress.length);
@@ -397,13 +404,13 @@ const Index = () => {
       
       // Immediately update progress data for today after adding a task
       const today = getTodayDateString();
-      const todayTasksAfterAdd = updatedTasks.filter(t => 
+      const allTodayTasksAfterAdd = updatedTasks.filter(t => 
         t.dueDate === today || 
         (t.recurrence && isTaskDueToday(t))
       );
-      const completedTasksAfterAdd = todayTasksAfterAdd.filter(t => t.status === "completed");
-      const completionAfterAdd = todayTasksAfterAdd.length > 0 
-        ? completedTasksAfterAdd.length / todayTasksAfterAdd.length 
+      const completedTasksAfterAdd = allTodayTasksAfterAdd.filter(t => t.status === "completed");
+      const completionAfterAdd = allTodayTasksAfterAdd.length > 0 
+        ? completedTasksAfterAdd.length / allTodayTasksAfterAdd.length 
         : 0;
       
       // Update today's progress in the progress array
@@ -416,9 +423,9 @@ const Index = () => {
             ? {
                 ...p,
                 tasksCompleted: completedTasksAfterAdd.length,
-                tasksPlanned: todayTasksAfterAdd.length,
+                tasksPlanned: allTodayTasksAfterAdd.length,
                 completion: completionAfterAdd,
-                tasks: todayTasksAfterAdd,
+                tasks: allTodayTasksAfterAdd,
               }
             : p
         );
@@ -428,9 +435,9 @@ const Index = () => {
           {
             date: today,
             tasksCompleted: completedTasksAfterAdd.length,
-            tasksPlanned: todayTasksAfterAdd.length,
+            tasksPlanned: allTodayTasksAfterAdd.length,
             completion: completionAfterAdd,
-            tasks: todayTasksAfterAdd,
+            tasks: allTodayTasksAfterAdd,
           },
         ];
       }
@@ -440,7 +447,7 @@ const Index = () => {
       await saveProgress(user.uid, updatedProgress);
       
       // Update UI state variables directly
-      setTodayTasks(todayTasksAfterAdd);
+      setTodayTasks(allTodayTasksAfterAdd);
       setTodayCompleted(completedTasksAfterAdd.length);
       setTodayProgress(completionAfterAdd * 100);
     
@@ -589,13 +596,13 @@ const Index = () => {
       }
 
       // Immediately update progress data for today after completing a task
-      const todayTasksAfterComplete = updatedTasks.filter(t => 
+      const allTodayTasksAfterComplete = updatedTasks.filter(t => 
         t.dueDate === today || 
         (t.recurrence && isTaskDueToday(t))
       );
-      const completedTasksAfterComplete = todayTasksAfterComplete.filter(t => t.status === "completed");
-      const completionAfterComplete = todayTasksAfterComplete.length > 0 
-        ? completedTasksAfterComplete.length / todayTasksAfterComplete.length 
+      const completedTasksAfterComplete = allTodayTasksAfterComplete.filter(t => t.status === "completed");
+      const completionAfterComplete = allTodayTasksAfterComplete.length > 0 
+        ? completedTasksAfterComplete.length / allTodayTasksAfterComplete.length 
         : 0;
       
       // Update today's progress in the progress array
@@ -608,9 +615,9 @@ const Index = () => {
             ? {
                 ...p,
                 tasksCompleted: completedTasksAfterComplete.length,
-                tasksPlanned: todayTasksAfterComplete.length,
+                tasksPlanned: allTodayTasksAfterComplete.length,
                 completion: completionAfterComplete,
-                tasks: todayTasksAfterComplete,
+                tasks: allTodayTasksAfterComplete,
               }
             : p
         );
@@ -620,9 +627,9 @@ const Index = () => {
           {
             date: today,
             tasksCompleted: completedTasksAfterComplete.length,
-            tasksPlanned: todayTasksAfterComplete.length,
+            tasksPlanned: allTodayTasksAfterComplete.length,
             completion: completionAfterComplete,
-            tasks: todayTasksAfterComplete,
+            tasks: allTodayTasksAfterComplete,
           },
         ];
       }
@@ -632,7 +639,7 @@ const Index = () => {
       await saveProgress(user.uid, updatedProgress);
       
       // Update UI state variables directly
-      setTodayTasks(todayTasksAfterComplete);
+      setTodayTasks(allTodayTasksAfterComplete);
       setTodayCompleted(completedTasksAfterComplete.length);
       setTodayProgress(completionAfterComplete * 100);
 
