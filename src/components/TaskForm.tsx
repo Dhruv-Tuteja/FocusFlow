@@ -1,20 +1,18 @@
 import React, { useState, useRef } from "react";
 import { format } from "date-fns";
-import { Calendar as CalendarIcon, X, Plus, Tag as TagIcon, Repeat, Check, RotateCw } from "lucide-react";
+import { Calendar as CalendarIcon, X, Plus, Tag as TagIcon, Repeat, Check } from "lucide-react";
 import { Task, TaskTag, RecurrencePattern, WeekDay } from "@/types/task";
 import { generateId } from "@/utils/taskUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
-import { 
+import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-  DialogClose
+  DialogFooter
 } from "@/components/ui/dialog";
 import {
   Popover,

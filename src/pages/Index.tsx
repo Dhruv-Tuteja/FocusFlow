@@ -8,7 +8,6 @@ import { useNavigate } from "react-router-dom";
 import {
   getTodayDateString,
   updateStreak,
-  updateRecurringTask,
   isTaskDueToday,
   generateId,
 } from "@/utils/taskUtils";
@@ -33,7 +32,6 @@ import {
   saveTags,
   forceSaveAllUserData
 } from "@/lib/firebase";
-import { format } from "date-fns";
 
 // Function to rebuild progress data for all dates with tasks
 const rebuildProgressData = (tasks: Task[], existingProgress: DailyProgress[]): DailyProgress[] => {
