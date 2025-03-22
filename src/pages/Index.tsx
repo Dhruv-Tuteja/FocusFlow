@@ -157,15 +157,9 @@ const Index = () => {
         if (result.success && result.data) {
           console.log('User data loaded successfully:', result.data);
 
-          // Set tasks - IMPORTANT - make a deep copy to prevent reference issues
-          const loadedTasks = JSON.parse(JSON.stringify(result.data.tasks || []));
+          // Set tasks - CRITICALLY IMPORTANT: Keep original task data from Firestore
+          const loadedTasks = result.data.tasks || [];
           console.log('Setting tasks:', loadedTasks.length);
-          
-          // CRITICAL FIX: Save original task data to ensure we don't lose it
-          await forceSaveAllUserData(user.uid, {
-            tasks: loadedTasks
-          });
-          
           setTasks(loadedTasks);
           
           // Set progress
@@ -220,15 +214,9 @@ const Index = () => {
             setTags(loadedTags);
           }
           
-          // Set bookmarks - IMPORTANT - make a deep copy to prevent reference issues
-          const loadedBookmarks = JSON.parse(JSON.stringify(result.data.bookmarks || []));
+          // Set bookmarks - CRITICALLY IMPORTANT: Keep original bookmark data from Firestore
+          const loadedBookmarks = result.data.bookmarks || [];
           console.log('Setting bookmarks:', loadedBookmarks.length);
-          
-          // CRITICAL FIX: Save original bookmark data to ensure we don't lose it
-          await forceSaveAllUserData(user.uid, {
-            bookmarks: loadedBookmarks
-          });
-          
           setBookmarks(loadedBookmarks);
           
           // Initialize today's progress data if we have tasks but no progress for today
@@ -307,8 +295,8 @@ const Index = () => {
     console.log('Last used date:', lastUsedDate);
     console.log('Current date:', today);
     
-    // IMPORTANT: Start with a deep copy of the current tasks to avoid reference issues
-    const existingTasks = JSON.parse(JSON.stringify(tasks));
+    // IMPORTANT: Use regular tasks array without deep copying, to avoid losing past tasks
+    const existingTasks = [...tasks];
     
     // Process all recurring tasks regardless of when the app was last used
     // This ensures we handle cases where the app hasn't been opened for multiple days
@@ -342,19 +330,9 @@ const Index = () => {
         newTasksCreated++;
       });
       
-      // Update tasks in state and Firestore - use forceSaveAllUserData to ensure data persists
+      // Update tasks in state and Firestore - use regular saveTasks
       setTasks(updatedTasks);
-      
-      // CRITICAL FIX: Use forceAllUserData instead of just saveTasks
-      forceSaveAllUserData(user.uid, { tasks: updatedTasks })
-        .then(result => {
-          if (!result.success) {
-            // Fallback if force save fails
-            console.log('Force save failed, using regular save as fallback');
-            return saveTasks(user.uid, updatedTasks);
-          }
-          return result;
-        })
+      saveTasks(user.uid, updatedTasks)
         .then(result => {
           if (!result.success) {
             console.error('Failed to save recurring tasks');
@@ -367,14 +345,6 @@ const Index = () => {
         title: "Tasks updated for today",
         description: `${newTasksCreated} recurring tasks added for today.`,
       });
-    } else {
-      // CRITICAL FIX: Even if no recurring tasks, still save the current tasks to ensure persistence
-      forceSaveAllUserData(user.uid, { tasks: existingTasks })
-        .then(result => {
-          if (result.success) {
-            console.log('Successfully saved existing tasks during day check');
-          }
-        });
     }
   }, [user, tasks, progress]);
 
@@ -523,21 +493,16 @@ const Index = () => {
       console.log('Adding task:', task);
       const updatedTasks = [...tasks, task];
       
-      // Update local state first for fast UI response
+      // Update local state first
       setTasks(updatedTasks);
       
-      // Force save all user data including tasks
-      const result = await forceSaveAllUserData(user.uid, {
-        tasks: updatedTasks
-      });
+      // Use regular saveTasks method
+      console.log('Saving tasks to Firestore...');
+      const result = await saveTasks(user.uid, updatedTasks);
+      console.log('Save result:', result);
       
       if (!result.success) {
-        // Fallback to regular task save if force save fails
-        console.log('Force save failed, falling back to regular task save');
-        const regularSaveResult = await saveTasks(user.uid, updatedTasks);
-        if (!regularSaveResult.success) {
-          throw new Error('Failed to save task: ' + (regularSaveResult.error || 'Unknown error'));
-        }
+        throw new Error('Failed to save task');
       }
       
       // Immediately update progress data for today after adding a task
@@ -582,21 +547,17 @@ const Index = () => {
       
       // Update state and save to Firebase
       setProgress(updatedProgress);
-      
-      // Save progress data with force save as well
-      await forceSaveAllUserData(user.uid, {
-        progress: updatedProgress
-      });
+      await saveProgress(user.uid, updatedProgress);
       
       // Update UI state variables directly
       setTodayTasks(allTodayTasksAfterAdd);
       setTodayCompleted(completedTasksAfterAdd.length);
       setTodayProgress(completionAfterAdd * 100);
     
-    toast({
-      title: "Task added",
-      description: `"${task.title}" has been added to your tasks.`,
-    });
+      toast({
+        title: "Task added",
+        description: `"${task.title}" has been added to your tasks.`,
+      });
     } catch (error) {
       console.error('Error adding task:', error);
       toast({
@@ -878,21 +839,13 @@ const Index = () => {
       console.log('Adding bookmark:', bookmark.title);
       const updatedBookmarks = [...bookmarks, bookmark];
       
-      // Update state immediately for fast UI response
+      // Update state
       setBookmarks(updatedBookmarks);
       
-      // Force save all user data including bookmarks
-      const result = await forceSaveAllUserData(user.uid, {
-        bookmarks: updatedBookmarks
-      });
-      
+      // Use regular saveBookmarks method
+      const result = await saveBookmarks(user.uid, updatedBookmarks);
       if (!result.success) {
-        // Fallback to regular bookmark save if force save fails
-        console.log('Force save failed, falling back to regular bookmark save');
-        const regularSaveResult = await saveBookmarks(user.uid, updatedBookmarks);
-        if (!regularSaveResult.success) {
-          throw new Error('Failed to save bookmark: ' + (regularSaveResult.error || 'Unknown error'));
-        }
+        throw new Error('Failed to save bookmark');
       }
       
       toast({
@@ -922,21 +875,13 @@ const Index = () => {
       
     const updatedBookmarks = bookmarks.filter(b => b.id !== bookmarkId);
     
-    // Update state immediately for fast UI response
+    // Update state
     setBookmarks(updatedBookmarks);
     
-    // Force save all user data including updated bookmarks
-    const result = await forceSaveAllUserData(user.uid, {
-      bookmarks: updatedBookmarks
-    });
-    
+    // Use regular saveBookmarks method
+    const result = await saveBookmarks(user.uid, updatedBookmarks);
     if (!result.success) {
-      // Fallback to regular bookmark save if force save fails
-      console.log('Force save failed, falling back to regular bookmark save');
-      const regularSaveResult = await saveBookmarks(user.uid, updatedBookmarks);
-      if (!regularSaveResult.success) {
-        throw new Error('Failed to delete bookmark: ' + (regularSaveResult.error || 'Unknown error'));
-      }
+      throw new Error('Failed to delete bookmark');
     }
     
     toast({
@@ -969,21 +914,13 @@ const Index = () => {
       const updatedBookmarks = [...bookmarks];
       updatedBookmarks[bookmarkIndex] = updatedBookmark;
       
-      // Update state immediately for fast UI response
+      // Update state
       setBookmarks(updatedBookmarks);
       
-      // Force save all user data including updated bookmarks
-      const result = await forceSaveAllUserData(user.uid, {
-        bookmarks: updatedBookmarks
-      });
-      
+      // Use regular saveBookmarks method
+      const result = await saveBookmarks(user.uid, updatedBookmarks);
       if (!result.success) {
-        // Fallback to regular bookmark save if force save fails
-        console.log('Force save failed, falling back to regular bookmark save');
-        const regularSaveResult = await saveBookmarks(user.uid, updatedBookmarks);
-        if (!regularSaveResult.success) {
-          throw new Error('Failed to update bookmark: ' + (regularSaveResult.error || 'Unknown error'));
-        }
+        throw new Error('Failed to update bookmark');
       }
       
       toast({
