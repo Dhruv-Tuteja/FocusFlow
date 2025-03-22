@@ -24,7 +24,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from '@/contexts/ThemeContext';
-import { getUserData, saveTasks, saveProgress, saveStreak, saveBookmarks, saveTags } from "@/lib/firebase";
+import { 
+  getUserData, 
+  saveTasks, 
+  saveProgress, 
+  saveStreak, 
+  saveBookmarks, 
+  saveTags,
+  forceSaveAllUserData
+} from "@/lib/firebase";
 import { format } from "date-fns";
 
 // Function to rebuild progress data for all dates with tasks
@@ -472,18 +480,23 @@ const Index = () => {
     
     try {
       console.log('Adding task:', task);
-    const updatedTasks = [...tasks, task];
+      const updatedTasks = [...tasks, task];
       
-      // Update local state first
-    setTasks(updatedTasks);
+      // Update local state first for fast UI response
+      setTasks(updatedTasks);
       
-      // Then save to Firestore
-      console.log('Saving tasks to Firestore...');
-      const result = await saveTasks(user.uid, updatedTasks);
-      console.log('Save result:', result);
+      // Force save all user data including tasks
+      const result = await forceSaveAllUserData(user.uid, {
+        tasks: updatedTasks
+      });
       
       if (!result.success) {
-        throw new Error('Failed to save task');
+        // Fallback to regular task save if force save fails
+        console.log('Force save failed, falling back to regular task save');
+        const regularSaveResult = await saveTasks(user.uid, updatedTasks);
+        if (!regularSaveResult.success) {
+          throw new Error('Failed to save task: ' + (regularSaveResult.error || 'Unknown error'));
+        }
       }
       
       // Immediately update progress data for today after adding a task
@@ -528,7 +541,11 @@ const Index = () => {
       
       // Update state and save to Firebase
       setProgress(updatedProgress);
-      await saveProgress(user.uid, updatedProgress);
+      
+      // Save progress data with force save as well
+      await forceSaveAllUserData(user.uid, {
+        progress: updatedProgress
+      });
       
       // Update UI state variables directly
       setTodayTasks(allTodayTasksAfterAdd);
@@ -818,12 +835,23 @@ const Index = () => {
     
     try {
       console.log('Adding bookmark:', bookmark.title);
-    const updatedBookmarks = [...bookmarks, bookmark];
-    setBookmarks(updatedBookmarks);
+      const updatedBookmarks = [...bookmarks, bookmark];
       
-      const result = await saveBookmarks(user.uid, updatedBookmarks);
+      // Update state immediately for fast UI response
+      setBookmarks(updatedBookmarks);
+      
+      // Force save all user data including bookmarks
+      const result = await forceSaveAllUserData(user.uid, {
+        bookmarks: updatedBookmarks
+      });
+      
       if (!result.success) {
-        throw new Error('Failed to save bookmark');
+        // Fallback to regular bookmark save if force save fails
+        console.log('Force save failed, falling back to regular bookmark save');
+        const regularSaveResult = await saveBookmarks(user.uid, updatedBookmarks);
+        if (!regularSaveResult.success) {
+          throw new Error('Failed to save bookmark: ' + (regularSaveResult.error || 'Unknown error'));
+        }
       }
       
       toast({
@@ -852,12 +880,23 @@ const Index = () => {
       }
       
     const updatedBookmarks = bookmarks.filter(b => b.id !== bookmarkId);
+    
+    // Update state immediately for fast UI response
     setBookmarks(updatedBookmarks);
-      
-      const result = await saveBookmarks(user.uid, updatedBookmarks);
-      if (!result.success) {
-        throw new Error('Failed to delete bookmark');
+    
+    // Force save all user data including updated bookmarks
+    const result = await forceSaveAllUserData(user.uid, {
+      bookmarks: updatedBookmarks
+    });
+    
+    if (!result.success) {
+      // Fallback to regular bookmark save if force save fails
+      console.log('Force save failed, falling back to regular bookmark save');
+      const regularSaveResult = await saveBookmarks(user.uid, updatedBookmarks);
+      if (!regularSaveResult.success) {
+        throw new Error('Failed to delete bookmark: ' + (regularSaveResult.error || 'Unknown error'));
       }
+    }
     
     toast({
       title: "Bookmark deleted",
@@ -889,11 +928,21 @@ const Index = () => {
       const updatedBookmarks = [...bookmarks];
       updatedBookmarks[bookmarkIndex] = updatedBookmark;
       
+      // Update state immediately for fast UI response
       setBookmarks(updatedBookmarks);
       
-      const result = await saveBookmarks(user.uid, updatedBookmarks);
+      // Force save all user data including updated bookmarks
+      const result = await forceSaveAllUserData(user.uid, {
+        bookmarks: updatedBookmarks
+      });
+      
       if (!result.success) {
-        throw new Error('Failed to update bookmark');
+        // Fallback to regular bookmark save if force save fails
+        console.log('Force save failed, falling back to regular bookmark save');
+        const regularSaveResult = await saveBookmarks(user.uid, updatedBookmarks);
+        if (!regularSaveResult.success) {
+          throw new Error('Failed to update bookmark: ' + (regularSaveResult.error || 'Unknown error'));
+        }
       }
       
       toast({
