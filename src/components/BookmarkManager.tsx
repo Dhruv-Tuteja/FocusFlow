@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Bookmark } from "@/types/task";
 import { 
@@ -24,24 +23,36 @@ import {
   Plus,
   ExternalLink,
   X,
-  Link
+  Link,
+  Edit,
+  MoreVertical
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface BookmarkManagerProps {
   bookmarks: Bookmark[];
   onAddBookmark: (bookmark: Bookmark) => void;
   onDeleteBookmark: (bookmarkId: string) => void;
+  onEditBookmark: (bookmark: Bookmark) => void;
 }
 
 const BookmarkManager: React.FC<BookmarkManagerProps> = ({
   bookmarks,
   onAddBookmark,
-  onDeleteBookmark
+  onDeleteBookmark,
+  onEditBookmark
 }) => {
   const [bookmarkUrl, setBookmarkUrl] = useState("");
   const [bookmarkTitle, setBookmarkTitle] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [currentBookmark, setCurrentBookmark] = useState<Bookmark | null>(null);
   const { toast } = useToast();
 
   const handleAddBookmark = () => {
@@ -84,6 +95,64 @@ const BookmarkManager: React.FC<BookmarkManagerProps> = ({
         variant: "destructive",
       });
     }
+  };
+
+  const handleEditBookmarkClick = (bookmark: Bookmark) => {
+    setCurrentBookmark(bookmark);
+    setBookmarkUrl(bookmark.url);
+    setBookmarkTitle(bookmark.title);
+    setEditDialogOpen(true);
+  };
+
+  const handleSaveEditedBookmark = () => {
+    if (!currentBookmark || !bookmarkUrl) return;
+
+    try {
+      // Ensure URL has a protocol
+      let url = bookmarkUrl;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+      
+      // Validate URL
+      new URL(url);
+      
+      const domain = extractDomain(url);
+      const title = bookmarkTitle || domain;
+      
+      // Keep the original color if the domain hasn't changed
+      const color = extractDomain(currentBookmark.url) === domain 
+        ? currentBookmark.color 
+        : generateColorFromString(domain);
+      
+      const updatedBookmark: Bookmark = {
+        ...currentBookmark,
+        title,
+        url,
+        color
+      };
+      
+      onEditBookmark(updatedBookmark);
+      setEditDialogOpen(false);
+      resetForm();
+      
+      toast({
+        title: "Bookmark updated",
+        description: `"${title}" has been updated.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Invalid URL",
+        description: "Please enter a valid URL",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const resetForm = () => {
+    setBookmarkUrl("");
+    setBookmarkTitle("");
+    setCurrentBookmark(null);
   };
 
   const handleBookmarkClick = (url: string) => {
@@ -132,11 +201,61 @@ const BookmarkManager: React.FC<BookmarkManagerProps> = ({
             </div>
             
             <DialogFooter>
-              <Button variant="secondary" onClick={() => setDialogOpen(false)}>
+              <Button variant="secondary" onClick={() => {
+                setDialogOpen(false);
+                resetForm();
+              }}>
                 Cancel
               </Button>
               <Button onClick={handleAddBookmark}>
                 Add Bookmark
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Bookmark Dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Bookmark</DialogTitle>
+              <DialogDescription>
+                Update your bookmark details.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-url">Website URL</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="edit-url"
+                    value={bookmarkUrl}
+                    onChange={(e) => setBookmarkUrl(e.target.value)}
+                    placeholder="https://example.com"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-title">Title</Label>
+                <Input
+                  id="edit-title"
+                  value={bookmarkTitle}
+                  onChange={(e) => setBookmarkTitle(e.target.value)}
+                  placeholder="My Bookmark"
+                />
+              </div>
+            </div>
+            
+            <DialogFooter>
+              <Button variant="secondary" onClick={() => {
+                setEditDialogOpen(false);
+                resetForm();
+              }}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveEditedBookmark}>
+                Save Changes
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -177,20 +296,41 @@ const BookmarkManager: React.FC<BookmarkManagerProps> = ({
                   {extractDomain(bookmark.url)}
                 </p>
               </div>
-              <ExternalLink size={14} className="text-muted-foreground ml-2" />
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 absolute right-1 top-1 opacity-0 group-hover:opacity-100 hover:opacity-100 focus:opacity-100"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDeleteBookmark(bookmark.id);
-              }}
-            >
-              <X size={12} />
-              <span className="sr-only">Delete</span>
-            </Button>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-7 w-7"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreVertical size={14} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleEditBookmarkClick(bookmark);
+                  }}
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteBookmark(bookmark.id);
+                  }}
+                  className="text-destructive"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         ))}
         
