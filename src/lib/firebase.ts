@@ -100,11 +100,48 @@ export const updateUserField = async (userId: string, field: string, value: unkn
 
 export const getUserData = async (userId: string) => {
   try {
+    console.log('Getting user data for ID:', userId);
+    if (!userId) {
+      console.error('Cannot get user data: User ID is null or undefined');
+      return { success: false, error: 'User ID is required' };
+    }
+    
     const userDoc = await getDoc(doc(db, 'users', userId));
     if (userDoc.exists()) {
-      return { success: true, data: userDoc.data() };
+      console.log('User document exists, retrieving data');
+      const userData = userDoc.data();
+      
+      // Ensure all required fields exist in the data
+      const completeUserData = {
+        tasks: userData.tasks || [],
+        progress: userData.progress || [],
+        streak: userData.streak || {
+          currentStreak: 0,
+          longestStreak: 0,
+          lastCompletionDate: null,
+        },
+        tags: userData.tags || [],
+        bookmarks: userData.bookmarks || [],
+        ...userData
+      };
+      
+      // If any fields are missing in the document, update it
+      if (!userData.tasks || !userData.progress || !userData.streak || 
+          !userData.tags || !userData.bookmarks) {
+        console.log('Some fields are missing in user data, updating document with complete data');
+        try {
+          await updateDoc(doc(db, 'users', userId), completeUserData);
+        } catch (error) {
+          console.warn('Could not update user document with complete data:', error);
+          // Try setDoc as fallback
+          await setDoc(doc(db, 'users', userId), completeUserData);
+        }
+      }
+      
+      return { success: true, data: completeUserData };
     } else {
       // Create empty user document if it doesn't exist
+      console.log('User document does not exist, creating new one');
       const emptyUserData = {
         tasks: [],
         progress: [],
@@ -115,9 +152,32 @@ export const getUserData = async (userId: string) => {
         },
         tags: [],
         bookmarks: [],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       };
-      await setDoc(doc(db, 'users', userId), emptyUserData);
-      return { success: true, data: emptyUserData };
+      
+      try {
+        await setDoc(doc(db, 'users', userId), emptyUserData);
+        console.log('Empty user document created successfully');
+        
+        // Verify the document was created
+        const verifyDoc = await getDoc(doc(db, 'users', userId));
+        if (!verifyDoc.exists()) {
+          console.error('Failed to create user document');
+          return { 
+            success: false, 
+            error: 'Failed to create user document' 
+          };
+        }
+        
+        return { success: true, data: emptyUserData };
+      } catch (error) {
+        console.error('Error creating user document:', error);
+        return { 
+          success: false, 
+          error: error instanceof Error ? error.message : String(error)
+        };
+      }
     }
   } catch (error: unknown) {
     console.error('Error getting user data:', error);
@@ -153,10 +213,22 @@ export const saveTasks = async (userId: string, tasks: Task[]) => {
     } else {
       // Update existing document
       console.log('Updating existing user document with tasks');
-      await updateDoc(doc(db, 'users', userId), { 
-        tasks: cleanedTasks,
-        updatedAt: serverTimestamp()
-      });
+      try {
+        await updateDoc(doc(db, 'users', userId), { 
+          tasks: cleanedTasks,
+          updatedAt: serverTimestamp()
+        });
+      } catch (updateError) {
+        console.error('Error during updateDoc operation:', updateError);
+        // If update fails, try setDoc as a fallback
+        console.log('Attempting setDoc as fallback...');
+        const existingData = userDoc.data() || {};
+        await setDoc(doc(db, 'users', userId), { 
+          ...existingData,
+          tasks: cleanedTasks,
+          updatedAt: serverTimestamp()
+        });
+      }
     }
     
     // Verify the save was successful by reading the data back
@@ -199,6 +271,7 @@ export const saveProgress = async (userId: string, progress: DailyProgress[]) =>
     
     // Remove undefined values from progress
     const cleanedProgress = removeUndefinedValues(progress);
+    console.log('Cleaned progress data length:', cleanedProgress.length);
     
     // Check if user document exists
     const userDoc = await getDoc(doc(db, 'users', userId));
@@ -214,10 +287,22 @@ export const saveProgress = async (userId: string, progress: DailyProgress[]) =>
     } else {
       // Update existing document
       console.log('Updating existing user document with progress data');
-      await updateDoc(doc(db, 'users', userId), { 
-        progress: cleanedProgress,
-        updatedAt: serverTimestamp()
-      });
+      try {
+        await updateDoc(doc(db, 'users', userId), { 
+          progress: cleanedProgress,
+          updatedAt: serverTimestamp()
+        });
+      } catch (updateError) {
+        console.error('Error during updateDoc operation:', updateError);
+        // If update fails, try setDoc as a fallback
+        console.log('Attempting setDoc as fallback...');
+        const existingData = userDoc.data() || {};
+        await setDoc(doc(db, 'users', userId), { 
+          ...existingData,
+          progress: cleanedProgress,
+          updatedAt: serverTimestamp()
+        });
+      }
     }
     
     // Verify the save was successful
@@ -248,13 +333,14 @@ export const saveProgress = async (userId: string, progress: DailyProgress[]) =>
 export const saveStreak = async (userId: string, streak: StreakData) => {
   try {
     console.log('Saving streak data to Firestore for user', userId);
+    console.log('Streak data:', streak);
     
     if (!userId) {
       console.error('Cannot save streak: User ID is null or undefined');
       return { success: false, error: 'User ID is required' };
     }
     
-    // Remove undefined values from streak
+    // Clean streak data
     const cleanedStreak = removeUndefinedValues(streak);
     
     // Check if user document exists
@@ -271,16 +357,28 @@ export const saveStreak = async (userId: string, streak: StreakData) => {
     } else {
       // Update existing document
       console.log('Updating existing user document with streak data');
-      await updateDoc(doc(db, 'users', userId), { 
-        streak: cleanedStreak,
-        updatedAt: serverTimestamp()
-      });
+      try {
+        await updateDoc(doc(db, 'users', userId), { 
+          streak: cleanedStreak,
+          updatedAt: serverTimestamp()
+        });
+      } catch (updateError) {
+        console.error('Error during updateDoc operation:', updateError);
+        // If update fails, try setDoc as a fallback
+        console.log('Attempting setDoc as fallback...');
+        const existingData = userDoc.data() || {};
+        await setDoc(doc(db, 'users', userId), { 
+          ...existingData,
+          streak: cleanedStreak,
+          updatedAt: serverTimestamp()
+        });
+      }
     }
     
     // Verify the save was successful
     const verifyDoc = await getDoc(doc(db, 'users', userId));
     if (verifyDoc.exists() && verifyDoc.data().streak) {
-      console.log('Streak saved and verified successfully:', verifyDoc.data().streak);
+      console.log('Streak saved and verified successfully');
       return { success: true };
     } else {
       console.error('Streak data was not saved properly');
@@ -307,6 +405,7 @@ export const saveBookmarks = async (userId: string, bookmarks: Bookmark[]) => {
     
     // Remove undefined values from bookmarks
     const cleanedBookmarks = removeUndefinedValues(bookmarks);
+    console.log('Cleaned bookmarks for Firestore:', cleanedBookmarks.length);
     
     // Check if user document exists
     const userDoc = await getDoc(doc(db, 'users', userId));
@@ -328,8 +427,15 @@ export const saveBookmarks = async (userId: string, bookmarks: Bookmark[]) => {
       });
     }
     
-    console.log('Bookmarks saved successfully');
-    return { success: true };
+    // Verify the save was successful by reading the data back
+    const verifyDoc = await getDoc(doc(db, 'users', userId));
+    if (verifyDoc.exists() && verifyDoc.data().bookmarks) {
+      console.log('Bookmarks saved and verified successfully. Count:', verifyDoc.data().bookmarks.length);
+      return { success: true };
+    } else {
+      console.error('Bookmarks were not saved properly');
+      return { success: false, error: 'Bookmarks were not saved properly' };
+    }
   } catch (error: unknown) {
     console.error('Error saving bookmarks:', error);
     return { 
@@ -351,6 +457,7 @@ export const saveTags = async (userId: string, tags: TaskTag[]) => {
     
     // Remove undefined values from tags
     const cleanedTags = removeUndefinedValues(tags);
+    console.log('Cleaned tags for Firestore:', cleanedTags.length);
     
     // Check if user document exists
     const userDoc = await getDoc(doc(db, 'users', userId));
@@ -366,14 +473,33 @@ export const saveTags = async (userId: string, tags: TaskTag[]) => {
     } else {
       // Update existing document
       console.log('Updating existing user document with tags');
-      await updateDoc(doc(db, 'users', userId), { 
-        tags: cleanedTags,
-        updatedAt: serverTimestamp()
-      });
+      try {
+        await updateDoc(doc(db, 'users', userId), { 
+          tags: cleanedTags,
+          updatedAt: serverTimestamp()
+        });
+      } catch (updateError) {
+        console.error('Error during updateDoc operation:', updateError);
+        // If update fails, try setDoc as a fallback
+        console.log('Attempting setDoc as fallback...');
+        const existingData = userDoc.data() || {};
+        await setDoc(doc(db, 'users', userId), { 
+          ...existingData,
+          tags: cleanedTags,
+          updatedAt: serverTimestamp()
+        });
+      }
     }
     
-    console.log('Tags saved successfully');
-    return { success: true };
+    // Verify the save was successful by reading the data back
+    const verifyDoc = await getDoc(doc(db, 'users', userId));
+    if (verifyDoc.exists() && verifyDoc.data().tags) {
+      console.log('Tags saved and verified successfully. Count:', verifyDoc.data().tags.length);
+      return { success: true };
+    } else {
+      console.error('Tags were not saved properly');
+      return { success: false, error: 'Tags were not saved properly' };
+    }
   } catch (error: unknown) {
     console.error('Error saving tags:', error);
     return { 
