@@ -24,12 +24,8 @@ import {
   Plus,
   ExternalLink,
   X,
-  Link,
   Edit,
-  MoreVertical,
-  Pencil,
-  PlusCircle,
-  Trash2
+  MoreVertical
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -38,13 +34,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { v4 as uuidv4 } from "uuid";
 
 interface BookmarkManagerProps {
   bookmarks: Bookmark[];
@@ -59,85 +48,111 @@ const BookmarkManager: React.FC<BookmarkManagerProps> = ({
   onDeleteBookmark,
   onEditBookmark
 }) => {
-  const [newBookmarkUrl, setNewBookmarkUrl] = useState("");
-  const [newBookmarkTitle, setNewBookmarkTitle] = useState("");
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  
-  const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
-  const [editBookmarkUrl, setEditBookmarkUrl] = useState("");
-  const [editBookmarkTitle, setEditBookmarkTitle] = useState("");
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [bookmarkUrl, setBookmarkUrl] = useState("");
+  const [bookmarkTitle, setBookmarkTitle] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [currentBookmark, setCurrentBookmark] = useState<Bookmark | null>(null);
   const { toast } = useToast();
 
   const handleAddBookmark = () => {
-    if (!newBookmarkUrl.trim()) {
-      return;
+    if (!bookmarkUrl) return;
+
+    try {
+      // Ensure URL has a protocol
+      let url = bookmarkUrl;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+
+      // Validate URL
+      new URL(url);
+      
+      const domain = extractDomain(url);
+      const title = bookmarkTitle || domain;
+      const color = generateColorFromString(domain);
+
+      const newBookmark: Bookmark = {
+        id: generateId(),
+        title,
+        url,
+        color
+      };
+
+      onAddBookmark(newBookmark);
+      setBookmarkUrl("");
+      setBookmarkTitle("");
+      setDialogOpen(false);
+      
+      toast({
+        title: "Bookmark added",
+        description: `"${title}" has been added to your bookmarks.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Invalid URL",
+        description: "Please enter a valid URL",
+        variant: "destructive",
+      });
     }
-
-    // Simple URL validation
-    let url = newBookmarkUrl.trim();
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      url = "https://" + url;
-    }
-
-    // Default title to URL if not provided
-    const title = newBookmarkTitle.trim() || new URL(url).hostname;
-
-    const newBookmark: Bookmark = {
-      id: uuidv4(),
-      title,
-      url,
-      createdAt: new Date().toISOString(),
-    };
-
-    onAddBookmark(newBookmark);
-    setNewBookmarkUrl("");
-    setNewBookmarkTitle("");
-    setIsAddDialogOpen(false);
-    
-    toast({
-      title: "Bookmark added",
-      description: `"${title}" has been added to your bookmarks.`,
-    });
   };
 
-  const openEditDialog = (bookmark: Bookmark) => {
-    setEditingBookmark(bookmark);
-    setEditBookmarkTitle(bookmark.title);
-    setEditBookmarkUrl(bookmark.url);
-    setIsEditDialogOpen(true);
+  const handleEditBookmarkClick = (bookmark: Bookmark) => {
+    setCurrentBookmark(bookmark);
+    setBookmarkUrl(bookmark.url);
+    setBookmarkTitle(bookmark.title);
+    setEditDialogOpen(true);
   };
 
-  const handleEditBookmark = () => {
-    if (!editingBookmark || !editBookmarkUrl.trim()) {
-      return;
+  const handleSaveEditedBookmark = () => {
+    if (!currentBookmark || !bookmarkUrl) return;
+
+    try {
+      // Ensure URL has a protocol
+      let url = bookmarkUrl;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+      }
+
+      // Validate URL
+      new URL(url);
+      
+      const domain = extractDomain(url);
+      const title = bookmarkTitle || domain;
+      
+      // Keep the original color if the domain hasn't changed
+      const color = extractDomain(currentBookmark.url) === domain 
+        ? currentBookmark.color 
+        : generateColorFromString(domain);
+
+      const updatedBookmark: Bookmark = {
+        ...currentBookmark,
+        title,
+        url,
+        color
+      };
+
+      onEditBookmark(updatedBookmark);
+      setEditDialogOpen(false);
+      resetForm();
+      
+      toast({
+        title: "Bookmark updated",
+        description: `"${title}" has been updated.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Invalid URL",
+        description: "Please enter a valid URL",
+        variant: "destructive",
+      });
     }
+  };
 
-    // Simple URL validation
-    let url = editBookmarkUrl.trim();
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      url = "https://" + url;
-    }
-
-    // Default title to URL if not provided
-    const title = editBookmarkTitle.trim() || new URL(url).hostname;
-
-    const updatedBookmark: Bookmark = {
-      ...editingBookmark,
-      title,
-      url,
-    };
-
-    onEditBookmark(updatedBookmark);
-    setEditingBookmark(null);
-    setEditBookmarkTitle("");
-    setEditBookmarkUrl("");
-    setIsEditDialogOpen(false);
-    
-    toast({
-      title: "Bookmark updated",
-      description: `"${title}" has been updated.`,
-    });
+  const resetForm = () => {
+    setBookmarkUrl("");
+    setBookmarkTitle("");
+    setCurrentBookmark(null);
   };
 
   const handleBookmarkClick = (url: string) => {
@@ -145,161 +160,193 @@ const BookmarkManager: React.FC<BookmarkManagerProps> = ({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Bookmarks</h2>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+    <div className="mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-medium">Bookmarks</h2>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button variant="outline" size="sm">
-              <Plus className="mr-1 h-4 w-4" />
-              Add
+            <Button variant="outline" size="icon">
+              <Plus size={18} />
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add a new bookmark</DialogTitle>
+              <DialogTitle>Add Bookmark</DialogTitle>
               <DialogDescription>
-                Enter the details for your new bookmark.
+                Add a website to your bookmarks for quick access.
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
+            
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="url">Website URL</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="url"
+                    value={bookmarkUrl}
+                    onChange={(e) => setBookmarkUrl(e.target.value)}
+                    placeholder="https://example.com"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="title">Title (optional)</Label>
                 <Input
                   id="title"
-                  value={newBookmarkTitle}
-                  onChange={(e) => setNewBookmarkTitle(e.target.value)}
+                  value={bookmarkTitle}
+                  onChange={(e) => setBookmarkTitle(e.target.value)}
                   placeholder="My Bookmark"
                 />
               </div>
-              <div className="grid gap-2">
-                <Label htmlFor="url">URL</Label>
+            </div>
+            
+            <DialogFooter>
+              <Button variant="secondary" onClick={() => {
+                setDialogOpen(false);
+                resetForm();
+              }}>
+                Cancel
+              </Button>
+              <Button onClick={handleAddBookmark}>
+                Add Bookmark
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Bookmark Dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Bookmark</DialogTitle>
+              <DialogDescription>
+                Update your bookmark details.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-url">Website URL</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="edit-url"
+                    value={bookmarkUrl}
+                    onChange={(e) => setBookmarkUrl(e.target.value)}
+                    placeholder="https://example.com"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-title">Title</Label>
                 <Input
-                  id="url"
-                  value={newBookmarkUrl}
-                  onChange={(e) => setNewBookmarkUrl(e.target.value)}
-                  placeholder="https://example.com"
+                  id="edit-title"
+                  value={bookmarkTitle}
+                  onChange={(e) => setBookmarkTitle(e.target.value)}
+                  placeholder="My Bookmark"
                 />
               </div>
             </div>
+            
             <DialogFooter>
-              <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
-              </DialogClose>
-              <Button onClick={handleAddBookmark}>Add Bookmark</Button>
+              <Button variant="secondary" onClick={() => {
+                setEditDialogOpen(false);
+                resetForm();
+              }}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveEditedBookmark}>
+                Save Changes
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Edit Bookmark Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit bookmark</DialogTitle>
-            <DialogDescription>
-              Update the details for your bookmark.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="edit-title">Title</Label>
-              <Input
-                id="edit-title"
-                value={editBookmarkTitle}
-                onChange={(e) => setEditBookmarkTitle(e.target.value)}
-                placeholder="My Bookmark"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-url">URL</Label>
-              <Input
-                id="edit-url"
-                value={editBookmarkUrl}
-                onChange={(e) => setEditBookmarkUrl(e.target.value)}
-                placeholder="https://example.com"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Cancel</Button>
-            </DialogClose>
-            <Button onClick={handleEditBookmark}>Save Changes</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-        {bookmarks.map((bookmark) => (
+      <div className="grid grid-cols-1 gap-2">
+        {bookmarks.map(bookmark => (
           <div
             key={bookmark.id}
-            className="flex items-center justify-between rounded-md border p-3 shadow-sm"
+            style={{ 
+              borderLeft: `4px solid ${bookmark.color || '#4C51BF'}`,
+              background: `linear-gradient(90deg, ${bookmark.color}15, transparent)`
+            }} 
+            className="relative flex items-center justify-between p-3 rounded-md border border-border hover:shadow-sm transition-shadow"
           >
-            <div className="flex-1 overflow-hidden mr-2">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => handleBookmarkClick(bookmark.url)}
-                      className="w-full text-left"
-                    >
-                      <h3 className="truncate font-medium hover:underline">
-                        {bookmark.title}
-                      </h3>
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{bookmark.url}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+            <div 
+              className="flex items-center gap-3 cursor-pointer w-full"
+              onClick={() => handleBookmarkClick(bookmark.url)}
+            >
+              <div 
+                className="flex items-center justify-center w-8 h-8 rounded-md"
+                style={{ backgroundColor: `${bookmark.color}25` }}
+              >
+                {bookmark.iconUrl ? (
+                  <img 
+                    src={bookmark.iconUrl} 
+                    alt={bookmark.title} 
+                    className="w-4 h-4"
+                  />
+                ) : (
+                  <Globe size={16} style={{ color: bookmark.color || '#4C51BF' }} />
+                )}
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <p className="font-medium truncate">{bookmark.title}</p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {extractDomain(bookmark.url)}
+                </p>
+              </div>
             </div>
-            <div className="flex items-center space-x-1">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <MoreVertical className="h-4 w-4" />
-                    <span className="sr-only">Menu</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onClick={() => handleBookmarkClick(bookmark.url)}
-                  >
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    Open
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => openEditDialog(bookmark)}>
-                    <Pencil className="mr-2 h-4 w-4" />
-                    Edit
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => onDeleteBookmark(bookmark.id)}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-7 w-7"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MoreVertical size={14} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleEditBookmarkClick(bookmark);
+                  }}
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteBookmark(bookmark.id);
+                  }}
+                  className="text-destructive"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         ))}
+        
         {bookmarks.length === 0 && (
-          <div className="col-span-full flex flex-col items-center justify-center rounded-md border border-dashed p-8 text-center">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
-              <PlusCircle className="h-10 w-10 text-primary" />
-            </div>
-            <h3 className="mt-4 text-lg font-medium">No bookmarks yet</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Add your first bookmark to quickly access your favorite websites.
-            </p>
+          <div className="flex flex-col items-center justify-center p-6 text-center text-muted-foreground border border-dashed rounded-md">
+            <BookmarkIcon className="h-8 w-8 mb-2" />
+            <p>No bookmarks yet</p>
+            <p className="text-sm mt-1">Add websites you frequently visit</p>
             <Button
-              onClick={() => setIsAddDialogOpen(true)}
+              variant="outline" 
+              size="sm" 
               className="mt-4"
-              variant="outline"
+              onClick={() => setDialogOpen(true)}
             >
-              Add Bookmark
+              <Plus className="h-4 w-4 mr-2" />
+              Add bookmark
             </Button>
           </div>
         )}

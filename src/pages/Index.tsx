@@ -130,87 +130,148 @@ const Index = () => {
 
   // Load user data when user changes
   useEffect(() => {
-    const loadUserData = async (userId: string) => {
-      console.log(`[${new Date().toLocaleTimeString()}] Loading user data for user:`, userId);
+    const loadUserData = async () => {
+      // Log the current date at initialization
+      const currentDate = getTodayDateString();
+      console.log('[CRITICAL] Current date at app initialization:', currentDate);
       
+      if (!user) {
+        // Reset all data if no user is logged in
+        setTasks([]);
+        setProgress([]);
+        setStreak({
+          currentStreak: 0,
+          longestStreak: 0,
+          lastCompletionDate: null,
+        });
+        setTags([]);
+        setBookmarks([]);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
       try {
-        // Use the updated getUserData function to get data from the new structure
-        const response = await getUserData(userId);
-        
-        if (response.success) {
-          // Add type assertion to resolve TypeScript errors
-          const userData = response.data as {
-            tasks?: Task[],
-            bookmarks?: Bookmark[],
-            progress?: DailyProgress[],
-            streak?: StreakData,
-            tags?: TaskTag[]
-          };
+        console.log('[CRITICAL] Loading user data from Firestore...');
+        const result = await getUserData(user.uid);
+        if (result.success && result.data) {
+          console.log('[CRITICAL] User data loaded successfully');
+
+          // Set tasks - CRITICALLY IMPORTANT: Keep original task data from Firestore
+          const loadedTasks = result.data.tasks || [];
+          console.log('Setting tasks:', loadedTasks.length);
+          setTasks(loadedTasks);
           
-          console.log(`[${new Date().toLocaleTimeString()}] Successfully loaded user data:`, 
-            {
-              tasksCount: userData.tasks?.length || 0,
-              bookmarksCount: userData.bookmarks?.length || 0,
-              progressCount: userData.progress?.length || 0
-            }
-          );
+          // Set progress
+          const loadedProgress = result.data.progress || [];
+          console.log('Setting progress:', loadedProgress.length);
           
-          // Update state with the loaded data
-          setTasks(userData.tasks || []);
-          setBookmarks(userData.bookmarks || []);
-          setProgress(userData.progress || []);
-          setStreak(userData.streak || { currentStreak: 0, longestStreak: 0, lastCompletionDate: null });
-          setTags(userData.tags || []);
+          // Rebuild missing progress entries
+          const updatedProgress = rebuildProgressData(loadedTasks, loadedProgress);
           
-          // After loading data, check if we need to rebuild progress
-          if (userData.tasks && userData.tasks.length > 0 && userData.progress) {
-            const updatedProgress = rebuildProgressData(userData.tasks, userData.progress);
-            
-            // If progress was updated, save it back to the database
-            if (updatedProgress.length !== userData.progress.length) {
-              console.log(`Progress data was updated: ${userData.progress.length} -> ${updatedProgress.length} entries`);
-              setProgress(updatedProgress);
-              
-              // Save the updated progress
-              await saveProgress(userId, updatedProgress);
-            }
+          // Only update if there are changes to avoid unnecessary saves
+          if (updatedProgress.length !== loadedProgress.length) {
+            console.log('Progress data was updated. New length:', updatedProgress.length);
+            console.log('Saving updated progress data...');
+            setProgress(updatedProgress);
+            await saveProgress(user.uid, updatedProgress);
+          } else {
+            setProgress(loadedProgress);
           }
           
-          return true;
+          // Set streak
+          const loadedStreak = result.data.streak || {
+            currentStreak: 0,
+            longestStreak: 0,
+            lastCompletionDate: null,
+          };
+          console.log('Setting streak:', loadedStreak);
+          setStreak(loadedStreak);
+          
+          // Set tags
+          const loadedTags = result.data.tags || [];
+          
+          // If user has no tags, create default tags
+          if (loadedTags.length === 0) {
+            console.log('No tags found, creating default tags');
+            const defaultTags = [
+              { id: "1", name: "Work", color: "#4C51BF" },
+              { id: "2", name: "Personal", color: "#38A169" },
+              { id: "3", name: "Health", color: "#E53E3E" },
+              { id: "4", name: "Learning", color: "#D69E2E" },
+              { id: "5", name: "Family", color: "#DD6B20" },
+              { id: "6", name: "Home", color: "#805AD5" },
+              { id: "7", name: "Finance", color: "#2F855A" },
+              { id: "8", name: "Urgent", color: "#F56565" },
+              { id: "9", name: "Hobby", color: "#4299E1" },
+              { id: "10", name: "Social", color: "#ED64A6" },
+            ];
+            
+            setTags(defaultTags);
+            await saveTags(user.uid, defaultTags);
+            console.log('Default tags created and saved');
+          } else {
+            console.log('Setting tags:', loadedTags.length);
+            setTags(loadedTags);
+          }
+          
+          // Set bookmarks - CRITICALLY IMPORTANT: Keep original bookmark data from Firestore
+          const loadedBookmarks = result.data.bookmarks || [];
+          console.log('Setting bookmarks:', loadedBookmarks.length);
+          setBookmarks(loadedBookmarks);
+          
+          // Initialize today's progress data if we have tasks but no progress for today
+          const today = getTodayDateString();
+          const todaysTasksFromLoaded = loadedTasks.filter((task: Task) => 
+            task.dueDate === today || 
+            (task.recurrence && isTaskDueToday(task))
+          );
+          
+          // If we have tasks for today but no progress entry, create one immediately
+          if (todaysTasksFromLoaded.length > 0 && !loadedProgress.some((p: DailyProgress) => p.date === today)) {
+            console.log('We have tasks for today but no progress entry. Creating one now.');
+            
+            const todayCompleted = todaysTasksFromLoaded.filter((t: Task) => t.status === "completed").length;
+            const todayCompletion = todayCompleted / todaysTasksFromLoaded.length;
+            
+            const newProgressEntry: DailyProgress = {
+              date: today,
+              tasksCompleted: todayCompleted,
+              tasksPlanned: todaysTasksFromLoaded.length,
+              completion: todayCompletion,
+              tasks: todaysTasksFromLoaded
+            };
+            
+            const updatedProgress = [...loadedProgress, newProgressEntry];
+            console.log('Immediately saving new progress entry:', newProgressEntry);
+            setProgress(updatedProgress);
+            
+            // Save the new progress entry to Firestore
+            await saveProgress(user.uid, updatedProgress);
+          }
+          
+          console.log('User data set successfully');
         } else {
-          console.error("Error loading user data:", response.error);
+          console.error('Failed to load user data:', result);
           toast({
             title: "Error",
-            description: `Error loading data: ${response.error}`,
+            description: "Failed to load your data. Please try again.",
             variant: "destructive",
           });
-          return false;
         }
       } catch (error) {
-        console.error("Exception while loading user data:", error);
+        console.error('Error loading user data:', error);
         toast({
           title: "Error",
           description: "Failed to load your data. Please try again.",
           variant: "destructive",
         });
-        return false;
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    if (user) {
-      loadUserData(user.uid);
-    } else {
-      setTasks([]);
-      setProgress([]);
-      setStreak({
-        currentStreak: 0,
-        longestStreak: 0,
-        lastCompletionDate: null,
-      });
-      setTags([]);
-      setBookmarks([]);
-      setIsLoading(false);
-    }
+    loadUserData();
   }, [user, toast]);
 
   // Check for day change and handle recurring tasks

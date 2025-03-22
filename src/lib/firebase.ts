@@ -22,7 +22,7 @@ import {
   getDocs
 } from 'firebase/firestore';
 import { Task, DailyProgress, StreakData, Bookmark, TaskTag } from '@/types/task';
-import { getTodayDateString } from '@/utils/taskUtils';
+import { getTodayDateString, isTaskDueToday } from '@/utils/taskUtils';
 
 // Your Firebase configuration
 const firebaseConfig = {
@@ -111,47 +111,44 @@ export const getUserData = async (userId: string) => {
     }
     
     const userDoc = await getDoc(doc(db, 'users', userId));
-    let userData = {};
-    
-    // Load tasks using the new method
-    const tasksResult = await loadTasks(userId);
-    if (tasksResult.success) {
-      userData = { ...userData, tasks: tasksResult.data };
-    } else {
-      console.warn('Could not load tasks:', tasksResult.error);
-    }
-    
-    // Load bookmarks using the new method
-    const bookmarksResult = await loadBookmarks(userId);
-    if (bookmarksResult.success) {
-      userData = { ...userData, bookmarks: bookmarksResult.data };
-    } else {
-      console.warn('Could not load bookmarks:', bookmarksResult.error);
-    }
     
     if (userDoc.exists()) {
-      console.log('User document exists, retrieving other data');
-      const docData = userDoc.data();
+      console.log('User document exists, retrieving data');
+      const userData = userDoc.data();
       
-      // Get progress data
-      const progress = docData.progress || [];
-      userData = { ...userData, progress };
-      
-      // Get streak data
-      const streak = docData.streak || {
-        currentStreak: 0,
-        longestStreak: 0,
-        lastCompletionDate: null,
+      // Ensure all required fields exist in the data
+      const completeUserData = {
+        tasks: userData.tasks || [],
+        progress: userData.progress || [],
+        streak: userData.streak || {
+          currentStreak: 0,
+          longestStreak: 0,
+          lastCompletionDate: null,
+        },
+        tags: userData.tags || [],
+        bookmarks: userData.bookmarks || [],
+        ...userData
       };
-      userData = { ...userData, streak };
       
-      // Get tags data
-      const tags = docData.tags || [];
-      userData = { ...userData, tags };
+      // If any fields are missing in the document, update it
+      if (!userData.tasks || !userData.progress || !userData.streak || 
+          !userData.tags || !userData.bookmarks) {
+        console.log('Some fields are missing in user data, updating document with complete data');
+        try {
+          await updateDoc(doc(db, 'users', userId), completeUserData);
+        } catch (error) {
+          console.warn('Could not update user document with complete data:', error);
+          // Try setDoc as fallback
+          await setDoc(doc(db, 'users', userId), completeUserData);
+        }
+      }
+      
+      return { success: true, data: completeUserData };
     } else {
       // Create empty user document if it doesn't exist
       console.log('User document does not exist, creating new one');
       const emptyUserData = {
+        tasks: [],
         progress: [],
         streak: {
           currentStreak: 0,
@@ -159,6 +156,7 @@ export const getUserData = async (userId: string) => {
           lastCompletionDate: null,
         },
         tags: [],
+        bookmarks: [],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
@@ -167,17 +165,17 @@ export const getUserData = async (userId: string) => {
         await setDoc(doc(db, 'users', userId), emptyUserData);
         console.log('Empty user document created successfully');
         
-        // Add empty data to userData object
-        userData = { 
-          ...userData, 
-          progress: [],
-          streak: {
-            currentStreak: 0,
-            longestStreak: 0,
-            lastCompletionDate: null,
-          },
-          tags: []
-        };
+        // Verify the document was created
+        const verifyDoc = await getDoc(doc(db, 'users', userId));
+        if (!verifyDoc.exists()) {
+          console.error('Failed to create user document');
+          return { 
+            success: false, 
+            error: 'Failed to create user document' 
+          };
+        }
+        
+        return { success: true, data: emptyUserData };
       } catch (error) {
         console.error('Error creating user document:', error);
         return { 
@@ -186,8 +184,6 @@ export const getUserData = async (userId: string) => {
         };
       }
     }
-    
-    return { success: true, data: userData };
   } catch (error: unknown) {
     console.error('Error getting user data:', error);
     return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -197,48 +193,75 @@ export const getUserData = async (userId: string) => {
 // Tasks
 export const saveTasks = async (userId: string, tasks: Task[]) => {
   try {
-    console.log('Saving tasks to Firestore:', tasks.length, 'tasks for user', userId);
+    console.log('[CRITICAL] Saving tasks to Firestore:', tasks.length, 'tasks for user', userId);
     
     if (!userId) {
       console.error('Cannot save tasks: User ID is null or undefined');
       return { success: false, error: 'User ID is required' };
     }
     
-    // Group tasks by date
-    const tasksByDate: Record<string, Task[]> = {};
-    tasks.forEach(task => {
-      const date = task.dueDate || getTodayDateString();
-      if (!tasksByDate[date]) {
-        tasksByDate[date] = [];
-      }
-      tasksByDate[date].push(task);
-    });
+    // Check for tasks with future dates to help debug
+    const today = getTodayDateString();
+    const pastTasks = tasks.filter(t => t.dueDate < today);
+    const todayTasks = tasks.filter(t => t.dueDate === today || (t.recurrence && isTaskDueToday(t)));
+    console.log(`Task breakdown: ${pastTasks.length} past tasks, ${todayTasks.length} today's tasks`);
     
-    // Create a batch to perform multiple writes
-    const batch = writeBatch(db);
+    // IMPORTANT: Save the ENTIRE array of tasks to ensure historical tasks are preserved
+    // Remove undefined values from tasks
+    const cleanedTasks = removeUndefinedValues(tasks);
     
-    // Store overall tasks array in user document for backward compatibility
-    const userDocRef = doc(db, 'users', userId);
-    batch.set(userDocRef, { 
-      tasks: removeUndefinedValues(tasks),
-      updatedAt: serverTimestamp()
-    }, { merge: true });
+    // Check if user document exists
+    const userDoc = await getDoc(doc(db, 'users', userId));
     
-    // Store tasks by date in a dedicated subcollection
-    for (const [date, dateTasks] of Object.entries(tasksByDate)) {
-      const dateDocRef = doc(db, 'users', userId, 'tasksByDate', date);
-      batch.set(dateDocRef, {
-        tasks: removeUndefinedValues(dateTasks),
-        date,
+    if (!userDoc.exists()) {
+      // Create the document with tasks if it doesn't exist
+      console.log('Creating new user document with tasks');
+      await setDoc(doc(db, 'users', userId), { 
+        tasks: cleanedTasks,
+        createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
+    } else {
+      // Update existing document
+      console.log('Updating existing user document with tasks');
+      try {
+        await updateDoc(doc(db, 'users', userId), { 
+          tasks: cleanedTasks,
+          updatedAt: serverTimestamp()
+        });
+      } catch (updateError) {
+        console.error('Error during updateDoc operation:', updateError);
+        // If update fails, try setDoc as a fallback, but preserve existing data
+        console.log('Attempting setDoc as fallback...');
+        const existingData = userDoc.data() || {};
+        await setDoc(doc(db, 'users', userId), { 
+          ...existingData,
+          tasks: cleanedTasks,
+          updatedAt: serverTimestamp()
+        });
+      }
     }
     
-    // Commit the batch
-    await batch.commit();
-    console.log('Tasks saved successfully using new structure');
-    
-    return { success: true };
+    // Verify the save was successful
+    const verifyDoc = await getDoc(doc(db, 'users', userId));
+    if (verifyDoc.exists() && verifyDoc.data().tasks) {
+      const savedTasks = verifyDoc.data().tasks;
+      const pastTasksAfterSave = savedTasks.filter((t: Task) => t.dueDate < today);
+      
+      console.log('Tasks saved and verified successfully. Count:', savedTasks.length);
+      console.log(`Saved past tasks: ${pastTasksAfterSave.length} (should match ${pastTasks.length})`);
+      
+      if (pastTasksAfterSave.length < pastTasks.length) {
+        console.warn('WARNING: Some past tasks may have been lost!');
+        console.warn('Original past tasks:', pastTasks.length);
+        console.warn('Saved past tasks:', pastTasksAfterSave.length);
+      }
+      
+      return { success: true };
+    } else {
+      console.error('Tasks were not saved properly');
+      return { success: false, error: 'Tasks were not saved properly' };
+    }
   } catch (error: unknown) {
     console.error('Error saving tasks:', error);
     return { 
@@ -439,38 +462,57 @@ export const saveStreak = async (userId: string, streak: StreakData) => {
 // Bookmarks
 export const saveBookmarks = async (userId: string, bookmarks: Bookmark[]) => {
   try {
-    console.log('Saving bookmarks to Firestore:', bookmarks.length, 'bookmarks for user', userId);
+    console.log('[CRITICAL] Saving bookmarks to Firestore:', bookmarks.length, 'bookmarks for user', userId);
     
     if (!userId) {
       console.error('Cannot save bookmarks: User ID is null or undefined');
       return { success: false, error: 'User ID is required' };
     }
     
-    // Clean bookmarks
+    // Remove undefined values from bookmarks
     const cleanedBookmarks = removeUndefinedValues(bookmarks);
     
-    // Save to both old and new structure
-    const batch = writeBatch(db);
+    // Check if user document exists
+    const userDoc = await getDoc(doc(db, 'users', userId));
     
-    // Save to user document for backward compatibility
-    const userDocRef = doc(db, 'users', userId);
-    batch.set(userDocRef, { 
-      bookmarks: cleanedBookmarks,
-      updatedAt: serverTimestamp()
-    }, { merge: true });
+    if (!userDoc.exists()) {
+      // Create the document with bookmarks if it doesn't exist
+      console.log('Creating new user document with bookmarks');
+      await setDoc(doc(db, 'users', userId), { 
+        bookmarks: cleanedBookmarks,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    } else {
+      // Update existing document
+      console.log('Updating existing user document with bookmarks');
+      try {
+        await updateDoc(doc(db, 'users', userId), { 
+          bookmarks: cleanedBookmarks,
+          updatedAt: serverTimestamp()
+        });
+      } catch (updateError) {
+        console.error('Error during updateDoc operation:', updateError);
+        // If update fails, try setDoc as a fallback, but preserve existing data
+        console.log('Attempting setDoc as fallback...');
+        const existingData = userDoc.data() || {};
+        await setDoc(doc(db, 'users', userId), { 
+          ...existingData,
+          bookmarks: cleanedBookmarks,
+          updatedAt: serverTimestamp()
+        });
+      }
+    }
     
-    // Save to dedicated bookmarks document
-    const bookmarksDocRef = doc(db, 'users', userId, 'userData', 'bookmarks');
-    batch.set(bookmarksDocRef, {
-      items: cleanedBookmarks,
-      updatedAt: serverTimestamp()
-    });
-    
-    // Commit the batch
-    await batch.commit();
-    console.log('Bookmarks saved successfully using new structure');
-    
-    return { success: true };
+    // Verify the save was successful
+    const verifyDoc = await getDoc(doc(db, 'users', userId));
+    if (verifyDoc.exists() && verifyDoc.data().bookmarks) {
+      console.log('Bookmarks saved and verified successfully. Count:', verifyDoc.data().bookmarks.length);
+      return { success: true };
+    } else {
+      console.error('Bookmarks were not saved properly');
+      return { success: false, error: 'Bookmarks were not saved properly' };
+    }
   } catch (error: unknown) {
     console.error('Error saving bookmarks:', error);
     return { 
