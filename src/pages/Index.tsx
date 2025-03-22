@@ -157,9 +157,15 @@ const Index = () => {
         if (result.success && result.data) {
           console.log('User data loaded successfully:', result.data);
 
-          // Set tasks
-          const loadedTasks = result.data.tasks || [];
+          // Set tasks - IMPORTANT - make a deep copy to prevent reference issues
+          const loadedTasks = JSON.parse(JSON.stringify(result.data.tasks || []));
           console.log('Setting tasks:', loadedTasks.length);
+          
+          // CRITICAL FIX: Save original task data to ensure we don't lose it
+          await forceSaveAllUserData(user.uid, {
+            tasks: loadedTasks
+          });
+          
           setTasks(loadedTasks);
           
           // Set progress
@@ -209,13 +215,20 @@ const Index = () => {
             setTags(defaultTags);
             await saveTags(user.uid, defaultTags);
             console.log('Default tags created and saved');
-    } else {
+          } else {
             console.log('Setting tags:', loadedTags.length);
             setTags(loadedTags);
           }
           
-          // Set bookmarks
-          const loadedBookmarks = result.data.bookmarks || [];
+          // Set bookmarks - IMPORTANT - make a deep copy to prevent reference issues
+          const loadedBookmarks = JSON.parse(JSON.stringify(result.data.bookmarks || []));
+          console.log('Setting bookmarks:', loadedBookmarks.length);
+          
+          // CRITICAL FIX: Save original bookmark data to ensure we don't lose it
+          await forceSaveAllUserData(user.uid, {
+            bookmarks: loadedBookmarks
+          });
+          
           setBookmarks(loadedBookmarks);
           
           // Initialize today's progress data if we have tasks but no progress for today
@@ -294,12 +307,15 @@ const Index = () => {
     console.log('Last used date:', lastUsedDate);
     console.log('Current date:', today);
     
+    // IMPORTANT: Start with a deep copy of the current tasks to avoid reference issues
+    const existingTasks = JSON.parse(JSON.stringify(tasks));
+    
     // Process all recurring tasks regardless of when the app was last used
     // This ensures we handle cases where the app hasn't been opened for multiple days
     console.log('Checking for recurring tasks due today...');
     
     // Filter tasks that should recur today but have past dates
-    const recurringTasksDueToday = tasks.filter(task => 
+    const recurringTasksDueToday = existingTasks.filter((task: Task) => 
       task.recurrence && 
       isTaskDueToday(task) && 
       task.dueDate < today // Task is from a past date
@@ -309,10 +325,10 @@ const Index = () => {
     
     if (recurringTasksDueToday.length > 0) {
       // Create updated tasks with reset statuses for today
-      const updatedTasks = [...tasks];
+      const updatedTasks = [...existingTasks];
       let newTasksCreated = 0;
       
-      recurringTasksDueToday.forEach(task => {
+      recurringTasksDueToday.forEach((task: Task) => {
         // Create a new version of this task for today
         const resetTask: Task = {
           ...task,
@@ -326,14 +342,39 @@ const Index = () => {
         newTasksCreated++;
       });
       
-      // Update tasks in state and Firestore
+      // Update tasks in state and Firestore - use forceSaveAllUserData to ensure data persists
       setTasks(updatedTasks);
-      saveTasks(user.uid, updatedTasks);
+      
+      // CRITICAL FIX: Use forceAllUserData instead of just saveTasks
+      forceSaveAllUserData(user.uid, { tasks: updatedTasks })
+        .then(result => {
+          if (!result.success) {
+            // Fallback if force save fails
+            console.log('Force save failed, using regular save as fallback');
+            return saveTasks(user.uid, updatedTasks);
+          }
+          return result;
+        })
+        .then(result => {
+          if (!result.success) {
+            console.error('Failed to save recurring tasks');
+          } else {
+            console.log('Successfully saved recurring tasks');
+          }
+        });
       
       toast({
         title: "Tasks updated for today",
         description: `${newTasksCreated} recurring tasks added for today.`,
       });
+    } else {
+      // CRITICAL FIX: Even if no recurring tasks, still save the current tasks to ensure persistence
+      forceSaveAllUserData(user.uid, { tasks: existingTasks })
+        .then(result => {
+          if (result.success) {
+            console.log('Successfully saved existing tasks during day check');
+          }
+        });
     }
   }, [user, tasks, progress]);
 
