@@ -936,230 +936,238 @@ const Index = () => {
   );
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b">
-        <div className="container px-4 py-3 max-w-6xl mx-auto">
-          <div className="flex items-center justify-between">
-            {/* Left side - Home button */}
-            <Button 
-              variant="ghost" 
-              onClick={() => navigate("/")}
-              className="font-semibold text-lg"
-            >
-              Focus Flow
-            </Button>
+    <div className="container mx-auto p-4 max-w-7xl">
+      {isLoading ? (
+        <div className="flex justify-center items-center h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        </div>
+      ) : (
+        <div className="min-h-screen bg-background">
+          {/* Header */}
+          <header className="border-b">
+            <div className="container px-4 py-3 max-w-6xl mx-auto">
+              <div className="flex items-center justify-between">
+                {/* Left side - Home button */}
+                <Button 
+                  variant="ghost" 
+                  onClick={() => navigate("/")}
+                  className="font-semibold text-lg"
+                >
+                  Focus Flow
+                </Button>
 
-            {/* Right side - Controls */}
-            <div className="flex items-center gap-2">
-              {/* Dark/Light Mode Toggle */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleTheme}
-                className="h-9 w-9"
-              >
-                {theme === 'dark' ? (
-                  <Sun className="h-4 w-4" />
-                ) : (
-                  <Moon className="h-4 w-4" />
-                )}
-              </Button>
-
-              {/* Account/Profile Button with Dropdown */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+                {/* Right side - Controls */}
+                <div className="flex items-center gap-2">
+                  {/* Dark/Light Mode Toggle */}
                   <Button
                     variant="ghost"
-                    className="flex items-center gap-2"
+                    size="icon"
+                    onClick={toggleTheme}
+                    className="h-9 w-9"
                   >
-                    <User className="h-4 w-4" />
-                    {user?.displayName || "Account"}
+                    {theme === 'dark' ? (
+                      <Sun className="h-4 w-4" />
+                    ) : (
+                      <Moon className="h-4 w-4" />
+                    )}
                   </Button>
-                </DropdownMenuTrigger>
-                {accountDropdownContent}
-              </DropdownMenu>
+
+                  {/* Account/Profile Button with Dropdown */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        className="flex items-center gap-2"
+                      >
+                        <User className="h-4 w-4" />
+                        {user?.displayName || "Account"}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    {accountDropdownContent}
+                  </DropdownMenu>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      </header>
+          </header>
 
-      {/* Main content */}
-      <div className="container px-4 py-8 max-w-6xl mx-auto">
-        {/* Centered Title Section */}
-        <div className="text-center mb-8">
-                <h1 className="text-3xl font-bold mb-2">Focus Flow</h1>
-                {selectedDate ? (
-                  <div>
-                    <p className="text-muted-foreground">
-                      Viewing tasks for {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                    </p>
-                    <button 
-                      className="text-primary text-sm mt-1"
-                      onClick={handleBackToToday}
-                    >
-                      Back to today
-                    </button>
+          {/* Main content */}
+          <div className="container px-4 py-8 max-w-6xl mx-auto">
+            {/* Centered Title Section */}
+            <div className="text-center mb-8">
+                    <h1 className="text-3xl font-bold mb-2">Focus Flow</h1>
+                    {selectedDate ? (
+                      <div>
+                        <p className="text-muted-foreground">
+                          Viewing tasks for {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                        </p>
+                        <button 
+                          className="text-primary text-sm mt-1"
+                          onClick={handleBackToToday}
+                        >
+                          Back to today
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground">
+                        {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                      </p>
+                    )}
                   </div>
-                ) : (
-                  <p className="text-muted-foreground">
-                    {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                  </p>
-                )}
-              </div>
-              
-        {/* Progress Card - updated to show selected date or today's progress */}
-        {user && (
-          <Card className="animate-scale-in mb-6">
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-center">
-                <CardTitle className="text-lg font-medium">
-                  {selectedDate 
-                    ? `Progress for ${new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` 
-                    : "Today's Progress"}
-                </CardTitle>
-                <div className="flex items-center gap-1">
-                  <span className="font-semibold">
-                    {Math.round(selectedDate ? selectedDateProgress : todayProgress)}%
-                  </span>
-                  <span className="text-sm text-muted-foreground">complete</span>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-muted/50 rounded-full h-2 mb-1">
-                <div 
-                  className="bg-primary rounded-full h-2 transition-all duration-700 ease-out"
-                  style={{ width: `${selectedDate ? selectedDateProgress : todayProgress}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <div>
-                  {selectedDate 
-                    ? `${selectedDateCompleted} of ${selectedDateTasks.length} tasks completed` 
-                    : `${todayCompleted} of ${todayTasks.length} tasks completed`}
-                </div>
-                {(selectedDate 
-                  ? (selectedDateCompleted === selectedDateTasks.length && selectedDateTasks.length > 0)
-                  : (todayCompleted === todayTasks.length && todayTasks.length > 0)
-                ) && (
-                  <div className="flex items-center gap-1 text-primary">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    <span>All done{selectedDate ? " for this day" : " for today"}!</span>
+                  
+            {/* Progress Card - updated to show selected date or today's progress */}
+            {user && (
+              <Card className="animate-scale-in mb-6">
+                <CardHeader className="pb-2">
+                  <div className="flex justify-between items-center">
+                    <CardTitle className="text-lg font-medium">
+                      {selectedDate 
+                        ? `Progress for ${new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` 
+                        : "Today's Progress"}
+                    </CardTitle>
+                    <div className="flex items-center gap-1">
+                      <span className="font-semibold">
+                        {Math.round(selectedDate ? selectedDateProgress : todayProgress)}%
+                      </span>
+                      <span className="text-sm text-muted-foreground">complete</span>
+                    </div>
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Three Column Layout */}
-        <div className="grid grid-cols-10 gap-6">
-          {/* Calendar Column - 30% */}
-          <div className="col-span-10 md:col-span-3">
-            {user ? (
-                    <Calendar 
-                      progress={progress} 
-                      streak={streak} 
-                      onDateSelect={handleDateSelect}
+                </CardHeader>
+                <CardContent>
+                  <div className="bg-muted/50 rounded-full h-2 mb-1">
+                    <div 
+                      className="bg-primary rounded-full h-2 transition-all duration-700 ease-out"
+                      style={{ width: `${selectedDate ? selectedDateProgress : todayProgress}%` }}
                     />
-            ) : (
-              <Card>
-                <CardContent className="py-6">
-                  <div className="flex flex-col items-center justify-center text-center space-y-3">
-                    <BarChart className="h-8 w-8 text-muted-foreground" />
-                    <div className="space-y-1">
-                      <h3 className="font-medium">Activity Tracking</h3>
-                      <p className="text-sm text-muted-foreground">Login to view your activity and progress.</p>
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <div>
+                      {selectedDate 
+                        ? `${selectedDateCompleted} of ${selectedDateTasks.length} tasks completed` 
+                        : `${todayCompleted} of ${todayTasks.length} tasks completed`}
                     </div>
+                    {(selectedDate 
+                      ? (selectedDateCompleted === selectedDateTasks.length && selectedDateTasks.length > 0)
+                      : (todayCompleted === todayTasks.length && todayTasks.length > 0)
+                    ) && (
+                      <div className="flex items-center gap-1 text-primary">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        <span>All done{selectedDate ? " for this day" : " for today"}!</span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
             )}
-                </div>
 
-          {/* Tasks Column - 50% */}
-          <div className="col-span-10 md:col-span-5">
-            {!selectedDate && user ? (
-              <TaskForm 
-                onAddTask={handleTaskCreate} 
-                availableTags={tags} 
-                onAddTag={handleAddTag}
-              />
-            ) : !selectedDate && !user ? (
-              <Card className="mb-6">
-                <CardContent className="pt-6">
-                  <div className="flex flex-col items-center justify-center text-center space-y-3">
-                    <User className="h-8 w-8 text-muted-foreground" />
-                    <div className="space-y-1">
-                      <h3 className="font-medium">Login Required</h3>
-                      <p className="text-sm text-muted-foreground">Please login to create and manage tasks.</p>
-              </div>
-                    <Button
-                      variant="outline"
-                      onClick={() => setShowLoginDialog(true)}
-                      className="mt-2"
-                    >
-                      Login to Continue
-                    </Button>
-            </div>
-                </CardContent>
-              </Card>
-            ) : null}
-            <TaskList
-              tasks={user ? tasks : []}
-              selectedDate={selectedDate || undefined}
-              onUpdateTask={handleTaskUpdate}
-              onCompleteTask={handleCompleteTask}
-              onDeleteTask={handleTaskDelete}
-            />
-            {!user && (
-              <Card className="mt-4">
-                <CardContent className="py-4">
-                  <p className="text-center text-sm text-muted-foreground">
-                    Login to view and manage your tasks
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-        </div>
-        
-          {/* Bookmarks Column - 20% */}
-          <div className="col-span-10 md:col-span-2">
-            {user ? (
-          <BookmarkManager 
-            bookmarks={bookmarks}
-            onAddBookmark={handleAddBookmark}
-            onDeleteBookmark={handleDeleteBookmark}
-            onEditBookmark={handleEditBookmark}
-          />
-            ) : (
-              <Card>
-                <CardContent className="py-6">
-                  <div className="flex flex-col items-center justify-center text-center space-y-3">
-                    <svg 
-                      className="h-8 w-8 text-muted-foreground"
-                      xmlns="http://www.w3.org/2000/svg" 
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeWidth="2" 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round"
-                    >
-                      <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>
-                    </svg>
-                    <div className="space-y-1">
-                      <h3 className="font-medium">Bookmarks</h3>
-                      <p className="text-sm text-muted-foreground">Login to manage your bookmarks.</p>
+            {/* Three Column Layout */}
+            <div className="grid grid-cols-10 gap-6">
+              {/* Calendar Column - 30% */}
+              <div className="col-span-10 md:col-span-3">
+                {user ? (
+                        <Calendar 
+                          progress={progress} 
+                          streak={streak} 
+                          onDateSelect={handleDateSelect}
+                        />
+                ) : (
+                  <Card>
+                    <CardContent className="py-6">
+                      <div className="flex flex-col items-center justify-center text-center space-y-3">
+                        <BarChart className="h-8 w-8 text-muted-foreground" />
+                        <div className="space-y-1">
+                          <h3 className="font-medium">Activity Tracking</h3>
+                          <p className="text-sm text-muted-foreground">Login to view your activity and progress.</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
                     </div>
+
+              {/* Tasks Column - 50% */}
+              <div className="col-span-10 md:col-span-5">
+                {!selectedDate && user ? (
+                  <TaskForm 
+                    onAddTask={handleTaskCreate} 
+                    availableTags={tags} 
+                    onAddTag={handleAddTag}
+                  />
+                ) : !selectedDate && !user ? (
+                  <Card className="mb-6">
+                    <CardContent className="pt-6">
+                      <div className="flex flex-col items-center justify-center text-center space-y-3">
+                        <User className="h-8 w-8 text-muted-foreground" />
+                        <div className="space-y-1">
+                          <h3 className="font-medium">Login Required</h3>
+                          <p className="text-sm text-muted-foreground">Please login to create and manage tasks.</p>
                   </div>
-                </CardContent>
-              </Card>
-            )}
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowLoginDialog(true)}
+                          className="mt-2"
+                        >
+                          Login to Continue
+                        </Button>
+              </div>
+                    </CardContent>
+                  </Card>
+                ) : null}
+                <TaskList
+                  tasks={user ? tasks : []}
+                  selectedDate={selectedDate || undefined}
+                  onUpdateTask={handleTaskUpdate}
+                  onCompleteTask={handleCompleteTask}
+                  onDeleteTask={handleTaskDelete}
+                />
+                {!user && (
+                  <Card className="mt-4">
+                    <CardContent className="py-4">
+                      <p className="text-center text-sm text-muted-foreground">
+                        Login to view and manage your tasks
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+            </div>
+            
+              {/* Bookmarks Column - 20% */}
+              <div className="col-span-10 md:col-span-2">
+                {user ? (
+              <BookmarkManager 
+                bookmarks={bookmarks}
+                onAddBookmark={handleAddBookmark}
+                onDeleteBookmark={handleDeleteBookmark}
+                onEditBookmark={handleEditBookmark}
+              />
+                ) : (
+                  <Card>
+                    <CardContent className="py-6">
+                      <div className="flex flex-col items-center justify-center text-center space-y-3">
+                        <svg 
+                          className="h-8 w-8 text-muted-foreground"
+                          xmlns="http://www.w3.org/2000/svg" 
+                          viewBox="0 0 24 24" 
+                          fill="none" 
+                          stroke="currentColor" 
+                          strokeWidth="2" 
+                          strokeLinecap="round" 
+                          strokeLinejoin="round"
+                        >
+                          <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/>
+                        </svg>
+                        <div className="space-y-1">
+                          <h3 className="font-medium">Bookmarks</h3>
+                          <p className="text-sm text-muted-foreground">Login to manage your bookmarks.</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

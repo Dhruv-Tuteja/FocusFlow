@@ -7,8 +7,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   onAuthStateChanged,
-  type User,
-  updateProfile
+  type User
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -17,7 +16,6 @@ import {
   getDoc, 
   updateDoc,
   serverTimestamp,
-  writeBatch,
   collection,
   getDocs,
   deleteDoc
