@@ -421,10 +421,22 @@ export const saveBookmarks = async (userId: string, bookmarks: Bookmark[]) => {
     } else {
       // Update existing document
       console.log('Updating existing user document with bookmarks');
-      await updateDoc(doc(db, 'users', userId), { 
-        bookmarks: cleanedBookmarks,
-        updatedAt: serverTimestamp()
-      });
+      try {
+        await updateDoc(doc(db, 'users', userId), { 
+          bookmarks: cleanedBookmarks,
+          updatedAt: serverTimestamp()
+        });
+      } catch (updateError) {
+        console.error('Error during updateDoc operation:', updateError);
+        // If update fails, try setDoc as a fallback
+        console.log('Attempting setDoc as fallback...');
+        const existingData = userDoc.data() || {};
+        await setDoc(doc(db, 'users', userId), { 
+          ...existingData,
+          bookmarks: cleanedBookmarks,
+          updatedAt: serverTimestamp()
+        });
+      }
     }
     
     // Verify the save was successful by reading the data back
