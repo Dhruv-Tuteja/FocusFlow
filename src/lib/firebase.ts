@@ -200,25 +200,71 @@ export async function saveTasks(userId: string, tasks: Task[]): Promise<SaveResu
   }
 
   try {
-    console.log(`[FIREBASE] Saving ${tasks.length} tasks for user ${userId.substring(0, 5)}...`);
+    console.log(`[FIREBASE DEBUG] Saving ${tasks.length} tasks for user ${userId.substring(0, 5)}...`);
+    console.log(`[FIREBASE DEBUG] First task in array:`, tasks.length > 0 ? JSON.stringify(tasks[0]) : 'No tasks');
     
     // Get a reference to the user document
     const userRef = doc(db, "users", userId);
     
-    // Save tasks to Firestore
-    await updateDoc(userRef, {
-      tasks: tasks
-    });
+    // Check if user document exists before updating
+    console.log(`[FIREBASE DEBUG] Checking if user document exists...`);
+    const userDoc = await getDoc(userRef);
+    if (!userDoc.exists()) {
+      console.error(`[CRITICAL ERROR] User document does not exist for ID ${userId.substring(0, 5)}`);
+      // Try to create the document first
+      console.log(`[FIREBASE DEBUG] Attempting to create user document...`);
+      try {
+        await setDoc(userRef, { 
+          tasks: tasks,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+        console.log(`[FIREBASE DEBUG] User document created successfully`);
+        return { success: true };
+      } catch (createError) {
+        console.error(`[CRITICAL ERROR] Failed to create user document:`, createError);
+        return { success: false, error: 'Failed to create user document' };
+      }
+    }
     
-    console.log(`[FIREBASE] Tasks saved successfully for user ${userId.substring(0, 5)}`);
-    return { success: true };
+    // Save tasks to Firestore
+    console.log(`[FIREBASE DEBUG] User document exists, updating tasks...`);
+    try {
+      await updateDoc(userRef, {
+        tasks: tasks,
+        updatedAt: serverTimestamp()
+      });
+      
+      console.log(`[FIREBASE SUCCESS] Tasks saved successfully for user ${userId.substring(0, 5)}`);
+      return { success: true };
+    } catch (updateError: any) {
+      console.error(`[CRITICAL ERROR] Error during updateDoc:`, updateError);
+      
+      // If the update fails, try setDoc as a fallback
+      console.log(`[FIREBASE DEBUG] Update failed, trying setDoc as fallback...`);
+      try {
+        const existingData = userDoc.data() || {};
+        await setDoc(userRef, {
+          ...existingData,
+          tasks: tasks,
+          updatedAt: serverTimestamp()
+        });
+        console.log(`[FIREBASE SUCCESS] Tasks saved successfully using setDoc fallback`);
+        return { success: true };
+      } catch (setDocError) {
+        console.error(`[CRITICAL ERROR] setDoc fallback failed:`, setDocError);
+        throw updateError; // Re-throw the original error for further handling
+      }
+    }
   } catch (error: any) {
     console.error('[CRITICAL ERROR] Error saving tasks to Firestore:', error);
+    console.error('[CRITICAL ERROR] Error code:', error?.code);
+    console.error('[CRITICAL ERROR] Error message:', error?.message);
     
     // If it's a document too large error, try again with chunking
     if (error?.code === 'firestore/invalid-argument') {
       try {
-        console.log('[FIREBASE] Document too large, attempting alternative saving method');
+        console.log('[FIREBASE DEBUG] Document too large, attempting alternative saving method');
         // Get a reference to the user document
         const userRef = doc(db, "users", userId);
         
@@ -227,6 +273,8 @@ export async function saveTasks(userId: string, tasks: Task[]): Promise<SaveResu
         for (let i = 0; i < tasks.length; i += 100) {
           taskChunks.push(tasks.slice(i, i + 100));
         }
+        
+        console.log(`[FIREBASE DEBUG] Split tasks into ${taskChunks.length} chunks`);
         
         // Save task count and clear existing tasks
         await updateDoc(userRef, {
@@ -238,26 +286,30 @@ export async function saveTasks(userId: string, tasks: Task[]): Promise<SaveResu
         const tasksCollectionRef = collection(userRef, "taskChunks");
         
         // Delete any existing chunks
+        console.log(`[FIREBASE DEBUG] Deleting existing chunks...`);
         const existingChunks = await getDocs(tasksCollectionRef);
         const deletePromises = existingChunks.docs.map(doc => deleteDoc(doc.ref));
         await Promise.all(deletePromises);
         
         // Save tasks in chunks
+        console.log(`[FIREBASE DEBUG] Saving tasks in chunks...`);
         const chunkPromises = taskChunks.map((chunk, index) => {
           const chunkDocRef = doc(tasksCollectionRef, `chunk_${index}`);
           return setDoc(chunkDocRef, { tasks: chunk });
         });
         
         await Promise.all(chunkPromises);
-        console.log(`[FIREBASE] Tasks saved in ${taskChunks.length} chunks for user ${userId.substring(0, 5)}`);
+        console.log(`[FIREBASE SUCCESS] Tasks saved in ${taskChunks.length} chunks for user ${userId.substring(0, 5)}`);
         return { success: true };
-      } catch (chunkError) {
+      } catch (chunkError: any) {
         console.error('[CRITICAL ERROR] Error saving tasks in chunks:', chunkError);
+        console.error('[CRITICAL ERROR] Chunk error code:', chunkError?.code);
+        console.error('[CRITICAL ERROR] Chunk error message:', chunkError?.message);
         return { success: false, error: 'Failed to save tasks in chunks' };
       }
     }
     
-    return { success: false, error: 'Failed to save tasks' };
+    return { success: false, error: `Failed to save tasks: ${error?.message || 'Unknown error'}` };
   }
 }
 
@@ -702,7 +754,11 @@ export const signOut = async () => {
 // Initialize user data with empty arrays for all collections
 export const initializeUserData = async (userId: string, userData: Record<string, unknown> = {}) => {
   try {
-    console.log('Initializing user data for:', userId);
+    console.log('[FIREBASE INIT] Initializing user data for:', userId);
+    
+    // Check if user document already exists
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
     
     const defaultData = {
       tasks: [],
@@ -714,18 +770,70 @@ export const initializeUserData = async (userId: string, userData: Record<string
       },
       tags: [],
       bookmarks: [],
+      createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
     
-    await setDoc(doc(db, 'users', userId), {
-      ...defaultData,
-      ...userData
-    });
+    // Define default tags that all users should have
+    const defaultTags = [
+      { id: "1", name: "Work", color: "#4C51BF" },
+      { id: "2", name: "Personal", color: "#38A169" },
+      { id: "3", name: "Health", color: "#E53E3E" },
+      { id: "4", name: "Learning", color: "#D69E2E" },
+      { id: "5", name: "Family", color: "#DD6B20" },
+      { id: "6", name: "Home", color: "#805AD5" },
+      { id: "7", name: "Finance", color: "#2F855A" },
+      { id: "8", name: "Urgent", color: "#F56565" },
+      { id: "9", name: "Hobby", color: "#4299E1" },
+      { id: "10", name: "Social", color: "#ED64A6" },
+    ];
     
-    console.log('User data initialized successfully');
+    // Merge with default tags
+    const completeData = {
+      ...defaultData,
+      tags: defaultTags,
+      ...userData
+    };
+    
+    if (userDoc.exists()) {
+      console.log('[FIREBASE INIT] User document already exists, updating with default data if needed');
+      
+      // Get current data
+      const currentData = userDoc.data();
+      const dataToUpdate: Record<string, any> = {};
+      
+      // Check what fields are missing and add them
+      if (!currentData.tasks) dataToUpdate.tasks = completeData.tasks;
+      if (!currentData.progress) dataToUpdate.progress = completeData.progress;
+      if (!currentData.streak) dataToUpdate.streak = completeData.streak;
+      if (!currentData.bookmarks) dataToUpdate.bookmarks = completeData.bookmarks;
+      if (!currentData.tags || currentData.tags.length === 0) dataToUpdate.tags = completeData.tags;
+      
+      // Only update if we have fields to update
+      if (Object.keys(dataToUpdate).length > 0) {
+        console.log('[FIREBASE INIT] Updating missing fields:', Object.keys(dataToUpdate));
+        await updateDoc(userRef, {
+          ...dataToUpdate,
+          updatedAt: serverTimestamp()
+        });
+      }
+    } else {
+      console.log('[FIREBASE INIT] Creating new user document with complete data');
+      // Create new document with complete structure
+      await setDoc(userRef, completeData);
+    }
+    
+    // Verify the user document was created/updated properly
+    const verifyDoc = await getDoc(userRef);
+    if (!verifyDoc.exists()) {
+      console.error('[FIREBASE INIT] Failed to create/update user document');
+      return { success: false, error: 'Failed to initialize user data' };
+    }
+    
+    console.log('[FIREBASE INIT] User data initialized successfully');
     return { success: true };
   } catch (error: unknown) {
-    console.error('Error initializing user data:', error);
+    console.error('[FIREBASE INIT] Error initializing user data:', error);
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 };

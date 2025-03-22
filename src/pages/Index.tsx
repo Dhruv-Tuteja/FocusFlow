@@ -492,6 +492,32 @@ const Index = () => {
 
     console.log('[CRITICAL ACTION] Creating new task:', task);
     
+    // Validate the task data before saving
+    if (!task.title) {
+      console.error('[VALIDATION ERROR] Task title is required');
+      toast({
+        title: "Error",
+        description: "Task title is required",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!task.id) {
+      console.error('[VALIDATION ERROR] Task ID is missing');
+      // Generate an ID if missing
+      task.id = generateId();
+      console.log('[VALIDATION] Generated task ID:', task.id);
+    }
+    
+    // Ensure dueDate is present
+    if (!task.dueDate) {
+      console.error('[VALIDATION ERROR] Task due date is missing');
+      // Set to today as fallback
+      task.dueDate = getTodayDateString();
+      console.log('[VALIDATION] Set task due date to today:', task.dueDate);
+    }
+    
     // Create new array with the task added
     const newTasks = [...tasks, task];
     
@@ -511,13 +537,27 @@ const Index = () => {
         });
       } else {
         console.error('[CRITICAL ERROR] Failed to save task:', result.error);
-        // Revert the local state change since the server update failed
-        setTasks(tasks);
-        toast({
-          title: "Error",
-          description: "Failed to save task. Please try again.",
-          variant: "destructive",
-        });
+        
+        // Try emergency fallback save with forceSaveAllUserData
+        console.log('[CRITICAL ACTION] Attempting emergency fallback save...');
+        const fallbackResult = await forceSaveAllUserData(user.uid, { tasks: newTasks });
+        
+        if (fallbackResult.success) {
+          console.log('[CRITICAL ACTION] Task saved successfully with fallback method');
+          toast({
+            title: "Success",
+            description: "Task created (using fallback method)",
+          });
+        } else {
+          // Revert the local state change since both methods failed
+          console.error('[CRITICAL ERROR] Fallback save also failed:', fallbackResult.error);
+          setTasks(tasks);
+          toast({
+            title: "Error",
+            description: "Failed to save task. Please try again later.",
+            variant: "destructive",
+          });
+        }
       }
     } catch (error) {
       console.error('[CRITICAL ERROR] Exception while saving task:', error);
