@@ -27,6 +27,76 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { getUserData, saveTasks, saveProgress, saveStreak, saveBookmarks, saveTags } from "@/lib/firebase";
 import { format } from "date-fns";
 
+// Function to rebuild progress data for all dates with tasks
+const rebuildProgressData = (tasks: Task[], existingProgress: DailyProgress[]): DailyProgress[] => {
+  console.log('Rebuilding progress data from task history...');
+  
+  // Create a copy of existing progress
+  const updatedProgress = [...existingProgress];
+  
+  // Get all unique dates from tasks
+  const taskDates = new Set<string>();
+  tasks.forEach(task => {
+    if (task.dueDate) {
+      taskDates.add(task.dueDate);
+    }
+  });
+  
+  console.log(`Found ${taskDates.size} unique dates with tasks`);
+  
+  // Process each date with tasks
+  taskDates.forEach(date => {
+    // Skip if we already have a progress entry for this date
+    const existingEntry = updatedProgress.find(p => p.date === date);
+    if (existingEntry) {
+      console.log(`Progress entry already exists for ${date}. Updating...`);
+      
+      // Get all tasks for this date
+      const tasksForDate = tasks.filter(task => 
+        task.dueDate === date || 
+        (task.recurrence && task.dueDate <= date && isTaskDueToday(task))
+      );
+      
+      const completedTasks = tasksForDate.filter(task => task.status === "completed");
+      const completion = tasksForDate.length > 0 ? completedTasks.length / tasksForDate.length : 0;
+      
+      // Update existing entry
+      existingEntry.tasksCompleted = completedTasks.length;
+      existingEntry.tasksPlanned = tasksForDate.length;
+      existingEntry.completion = completion;
+      existingEntry.tasks = tasksForDate;
+      
+      console.log(`Updated progress for ${date}: ${completedTasks.length}/${tasksForDate.length} (${Math.round(completion * 100)}%)`);
+    } else {
+      console.log(`Creating new progress entry for ${date}`);
+      
+      // Get all tasks for this date
+      const tasksForDate = tasks.filter(task => 
+        task.dueDate === date || 
+        (task.recurrence && task.dueDate <= date && isTaskDueToday(task))
+      );
+      
+      const completedTasks = tasksForDate.filter(task => task.status === "completed");
+      const completion = tasksForDate.length > 0 ? completedTasks.length / tasksForDate.length : 0;
+      
+      // Create new progress entry
+      const newEntry: DailyProgress = {
+        date,
+        tasksCompleted: completedTasks.length,
+        tasksPlanned: tasksForDate.length,
+        completion,
+        tasks: tasksForDate
+      };
+      
+      updatedProgress.push(newEntry);
+      console.log(`Added progress for ${date}: ${completedTasks.length}/${tasksForDate.length} (${Math.round(completion * 100)}%)`);
+    }
+  });
+  
+  console.log(`Progress data rebuild complete. Total entries: ${updatedProgress.length}`);
+  return updatedProgress;
+};
+
 const Index = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [progress, setProgress] = useState<DailyProgress[]>([]);
@@ -84,7 +154,18 @@ const Index = () => {
           // Set progress
           const loadedProgress = result.data.progress || [];
           console.log('Setting progress:', loadedProgress.length);
-          setProgress(loadedProgress);
+          
+          // Rebuild missing progress entries
+          const updatedProgress = rebuildProgressData(loadedTasks, loadedProgress);
+          
+          if (updatedProgress.length !== loadedProgress.length) {
+            console.log('Progress data was updated. New length:', updatedProgress.length);
+            console.log('Saving updated progress data...');
+            setProgress(updatedProgress);
+            await saveProgress(user.uid, updatedProgress);
+          } else {
+            setProgress(loadedProgress);
+          }
           
           // Set streak
           const loadedStreak = result.data.streak || {
