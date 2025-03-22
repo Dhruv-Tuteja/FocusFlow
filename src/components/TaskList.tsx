@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Check, Edit, Trash, Tag, MoreVertical } from "lucide-react";
 import { Task } from "@/types/task";
@@ -20,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { getTodayDateString, isTaskDueToday } from "@/utils/taskUtils";
 
 interface TaskListProps {
   tasks: Task[];
@@ -42,17 +42,37 @@ const TaskList: React.FC<TaskListProps> = ({
     setExpandedTaskId(expandedTaskId === taskId ? null : taskId);
   };
 
-  // Filter tasks based on selected date if provided
-  const displayTasks = selectedDate 
+  const today = getTodayDateString();
+  
+  // Filter tasks based on selected date if provided, or show only current/future tasks
+  const displayTasks = selectedDate
     ? tasks.filter(task => task.dueDate === selectedDate)
-    : tasks;
+    : tasks.filter(task => {
+        // Show task if:
+        // 1. It's due today or in the future, OR
+        // 2. It's a recurring task that is due today
+        return (
+          task.dueDate >= today || 
+          (task.recurrence && isTaskDueToday(task))
+        );
+      });
 
   const todayTasks = displayTasks.filter(
-    (task) => task.status !== "completed" && new Date(task.dueDate) <= new Date()
+    (task) => {
+      // For today tasks, show both exact matches for today and recurring tasks due today
+      if (selectedDate) {
+        return task.status !== "completed" && new Date(task.dueDate) <= new Date();
+      } else {
+        return (
+          task.status !== "completed" && 
+          (task.dueDate === today || (task.recurrence && isTaskDueToday(task)))
+        );
+      }
+    }
   );
   
   const futureTasks = displayTasks.filter(
-    (task) => task.status !== "completed" && new Date(task.dueDate) > new Date()
+    (task) => task.status !== "completed" && task.dueDate > today
   );
   
   const completedTasks = displayTasks.filter(

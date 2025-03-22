@@ -10,6 +10,7 @@ import {
   updateStreak,
   updateRecurringTask,
   isTaskDueToday,
+  generateId,
 } from "@/utils/taskUtils";
 import { CheckCircle2, BarChart, Sun, Moon, User } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -116,7 +117,7 @@ const Index = () => {
             setTags(defaultTags);
             await saveTags(user.uid, defaultTags);
             console.log('Default tags created and saved');
-          } else {
+    } else {
             console.log('Setting tags:', loadedTags.length);
             setTags(loadedTags);
           }
@@ -201,48 +202,46 @@ const Index = () => {
     console.log('Last used date:', lastUsedDate);
     console.log('Current date:', today);
     
-    // If this is a new day, or no last date found, check for recurring tasks
-    if (!lastUsedDate || lastUsedDate < today) {
-      console.log('New day detected. Checking for recurring tasks...');
+    // Process all recurring tasks regardless of when the app was last used
+    // This ensures we handle cases where the app hasn't been opened for multiple days
+    console.log('Checking for recurring tasks due today...');
+    
+    // Filter tasks that should recur today but have past dates
+    const recurringTasksDueToday = tasks.filter(task => 
+      task.recurrence && 
+      isTaskDueToday(task) && 
+      task.dueDate < today // Task is from a past date
+    );
+    
+    console.log('Found recurring tasks due today:', recurringTasksDueToday.length);
+    
+    if (recurringTasksDueToday.length > 0) {
+      // Create updated tasks with reset statuses for today
+      const updatedTasks = [...tasks];
+      let newTasksCreated = 0;
       
-      // Filter tasks that recur today
-      const recurringTasksDueToday = tasks.filter(task => 
-        task.recurrence && 
-        isTaskDueToday(task) && 
-        task.dueDate !== today
-      );
+      recurringTasksDueToday.forEach(task => {
+        // Create a new version of this task for today
+        const resetTask: Task = {
+          ...task,
+          id: generateId(), // Generate a new ID for the task
+          dueDate: today,
+          status: 'pending' // Reset status to pending
+        };
+        
+        // Add new task for today
+        updatedTasks.push(resetTask);
+        newTasksCreated++;
+      });
       
-      console.log('Found recurring tasks due today:', recurringTasksDueToday.length);
+      // Update tasks in state and Firestore
+      setTasks(updatedTasks);
+      saveTasks(user.uid, updatedTasks);
       
-      if (recurringTasksDueToday.length > 0) {
-        // Create updated tasks with reset statuses for today
-        const updatedTasks = [...tasks];
-        
-        recurringTasksDueToday.forEach(task => {
-          // Create a new version of this task for today
-          const resetTask: Task = {
-            ...task,
-            id: task.id, // Keep same ID to avoid duplicates
-            dueDate: today,
-            status: 'pending' // Reset status to pending
-          };
-          
-          // Find task's index and update it
-          const taskIndex = updatedTasks.findIndex(t => t.id === task.id);
-          if (taskIndex !== -1) {
-            updatedTasks[taskIndex] = resetTask;
-          }
-        });
-        
-        // Update tasks in state and Firestore
-        setTasks(updatedTasks);
-        saveTasks(user.uid, updatedTasks);
-        
-        toast({
-          title: "Tasks reset",
-          description: `${recurringTasksDueToday.length} recurring tasks reset for today.`,
-        });
-      }
+      toast({
+        title: "Tasks updated for today",
+        description: `${newTasksCreated} recurring tasks added for today.`,
+      });
     }
   }, [user, tasks, progress]);
 
@@ -279,7 +278,7 @@ const Index = () => {
 
       try {
         console.log('Updating daily progress...');
-        const today = getTodayDateString();
+    const today = getTodayDateString();
         
         // Debug logging
         console.log('Current progress array:', progress);
@@ -296,61 +295,61 @@ const Index = () => {
           completion: completion
         });
 
-        const existingProgress = progress.find(p => p.date === today);
+    const existingProgress = progress.find(p => p.date === today);
         console.log('Existing progress for today:', existingProgress);
         
-        let updatedProgress: DailyProgress[];
+    let updatedProgress: DailyProgress[];
 
-        if (existingProgress) {
+    if (existingProgress) {
           console.log('Updating existing progress entry');
-          updatedProgress = progress.map(p =>
-            p.date === today
-              ? {
-                  ...p,
-                  tasksCompleted: completedTasks.length,
-                  tasksPlanned: todayTasks.length,
-                  completion,
-                  tasks: todayTasks,
-                }
-              : p
-          );
-        } else {
-          console.log('Creating new progress entry for today');
-          // Always create an entry for today, even with zero tasks
-          updatedProgress = [
-            ...progress,
-            {
-              date: today,
+      updatedProgress = progress.map(p =>
+        p.date === today
+          ? {
+              ...p,
               tasksCompleted: completedTasks.length,
-              tasksPlanned: todayTasks.length || 0,
+              tasksPlanned: todayTasks.length,
               completion,
               tasks: todayTasks,
-            },
-          ];
-        }
+            }
+          : p
+      );
+    } else {
+          console.log('Creating new progress entry for today');
+          // Always create an entry for today, even with zero tasks
+      updatedProgress = [
+        ...progress,
+        {
+          date: today,
+          tasksCompleted: completedTasks.length,
+              tasksPlanned: todayTasks.length || 0,
+          completion,
+          tasks: todayTasks,
+        },
+      ];
+    }
 
         console.log('Setting updated progress:', updatedProgress);
         console.log('Progress count before update:', progress.length);
         console.log('Progress count after update:', updatedProgress.length);
         
         // Make sure to update state before saving to Firebase
-        setProgress(updatedProgress);
+    setProgress(updatedProgress);
         
         // Save to Firebase and capture result
         const saveResult = await saveProgress(user.uid, updatedProgress);
         console.log('Progress save result:', saveResult);
-        
+
         // Verify the progress was saved with color data
         if (saveResult.success) {
           // Now update streak based on the updated progress
-          const updatedStreak = updateStreak(updatedProgress, streak);
+    const updatedStreak = updateStreak(updatedProgress, streak);
           if (
             updatedStreak.currentStreak !== streak.currentStreak ||
             updatedStreak.longestStreak !== streak.longestStreak ||
             updatedStreak.lastCompletionDate !== streak.lastCompletionDate
           ) {
             console.log('Setting updated streak:', updatedStreak);
-            setStreak(updatedStreak);
+    setStreak(updatedStreak);
             await saveStreak(user.uid, updatedStreak);
           }
         } else {
@@ -382,10 +381,10 @@ const Index = () => {
     
     try {
       console.log('Adding task:', task);
-      const updatedTasks = [...tasks, task];
+    const updatedTasks = [...tasks, task];
       
       // Update local state first
-      setTasks(updatedTasks);
+    setTasks(updatedTasks);
       
       // Then save to Firestore
       console.log('Saving tasks to Firestore...');
@@ -444,11 +443,11 @@ const Index = () => {
       setTodayTasks(todayTasksAfterAdd);
       setTodayCompleted(completedTasksAfterAdd.length);
       setTodayProgress(completionAfterAdd * 100);
-      
-      toast({
-        title: "Task added",
-        description: `"${task.title}" has been added to your tasks.`,
-      });
+    
+    toast({
+      title: "Task added",
+      description: `"${task.title}" has been added to your tasks.`,
+    });
     } catch (error) {
       console.error('Error adding task:', error);
       toast({
@@ -525,11 +524,11 @@ const Index = () => {
         return;
       }
       
-      const updatedTasks = tasks.map(task =>
-        task.id === updatedTask.id ? updatedTask : task
-      );
+    const updatedTasks = tasks.map(task =>
+      task.id === updatedTask.id ? updatedTask : task
+    );
       
-      setTasks(updatedTasks);
+    setTasks(updatedTasks);
       const result = await saveTasks(user.uid, updatedTasks);
       if (!result.success) {
         throw new Error('Failed to update task');
@@ -549,7 +548,7 @@ const Index = () => {
     
     try {
       console.log('Completing task:', taskId);
-      const task = tasks.find(t => t.id === taskId);
+    const task = tasks.find(t => t.id === taskId);
       if (!task) {
         console.error('Task not found:', taskId);
         return;
@@ -568,22 +567,22 @@ const Index = () => {
         return;
       }
 
-      const newStatus: TaskStatus = task.status === "completed" ? "pending" : "completed";
-      
-      let updatedTasks = tasks.map(t =>
-        t.id === taskId
-          ? {
-              ...t,
-              status: newStatus,
-            }
-          : t
-      );
-      
-      if (newStatus === "completed" && task.recurrence && task.recurrence.pattern !== "once") {
-        updatedTasks = updateRecurringTask(task, updatedTasks);
-      }
+    const newStatus: TaskStatus = task.status === "completed" ? "pending" : "completed";
+    
+    let updatedTasks = tasks.map(t =>
+      t.id === taskId
+        ? {
+            ...t,
+            status: newStatus,
+          }
+        : t
+    );
+    
+    if (newStatus === "completed" && task.recurrence && task.recurrence.pattern !== "once") {
+      updatedTasks = updateRecurringTask(task, updatedTasks);
+    }
 
-      setTasks(updatedTasks);
+    setTasks(updatedTasks);
       const result = await saveTasks(user.uid, updatedTasks);
       if (!result.success) {
         throw new Error('Failed to update task status');
@@ -636,11 +635,11 @@ const Index = () => {
       setTodayTasks(todayTasksAfterComplete);
       setTodayCompleted(completedTasksAfterComplete.length);
       setTodayProgress(completionAfterComplete * 100);
-      
-      if (newStatus === "completed") {
-        toast({
-          title: "Task completed",
-          description: `"${task.title}" has been marked as completed.`,
+
+    if (newStatus === "completed") {
+      toast({
+        title: "Task completed",
+        description: `"${task.title}" has been marked as completed.`,
         });
       }
     } catch (error) {
@@ -658,28 +657,28 @@ const Index = () => {
     
     try {
       console.log('Deleting task:', taskId);
-      const task = tasks.find(t => t.id === taskId);
+    const task = tasks.find(t => t.id === taskId);
       if (!task) {
         console.error('Task not found:', taskId);
         return;
       }
 
-      const updatedTasks = tasks.filter(t => t.id !== taskId);
+    const updatedTasks = tasks.filter(t => t.id !== taskId);
       
-      setTasks(updatedTasks);
+    setTasks(updatedTasks);
       const result = await saveTasks(user.uid, updatedTasks);
       if (!result.success) {
         throw new Error('Failed to delete task');
       }
 
-      toast({
-        title: "Task deleted",
-        description: `"${task.title}" has been deleted.`,
-        variant: "destructive",
-      });
+    toast({
+      title: "Task deleted",
+      description: `"${task.title}" has been deleted.`,
+      variant: "destructive",
+    });
     } catch (error) {
       console.error('Error deleting task:', error);
-      toast({
+    toast({
         title: "Error",
         description: "Failed to delete task. Please try again.",
         variant: "destructive",
@@ -700,8 +699,8 @@ const Index = () => {
     
     try {
       console.log('Adding bookmark:', bookmark.title);
-      const updatedBookmarks = [...bookmarks, bookmark];
-      setBookmarks(updatedBookmarks);
+    const updatedBookmarks = [...bookmarks, bookmark];
+    setBookmarks(updatedBookmarks);
       
       const result = await saveBookmarks(user.uid, updatedBookmarks);
       if (!result.success) {
@@ -733,19 +732,19 @@ const Index = () => {
         return;
       }
       
-      const updatedBookmarks = bookmarks.filter(b => b.id !== bookmarkId);
-      setBookmarks(updatedBookmarks);
+    const updatedBookmarks = bookmarks.filter(b => b.id !== bookmarkId);
+    setBookmarks(updatedBookmarks);
       
       const result = await saveBookmarks(user.uid, updatedBookmarks);
       if (!result.success) {
         throw new Error('Failed to delete bookmark');
       }
-      
-      toast({
-        title: "Bookmark deleted",
-        description: "The bookmark has been removed.",
-        variant: "destructive",
-      });
+    
+    toast({
+      title: "Bookmark deleted",
+      description: "The bookmark has been removed.",
+      variant: "destructive",
+    });
     } catch (error) {
       console.error('Error deleting bookmark:', error);
       toast({
@@ -832,70 +831,70 @@ const Index = () => {
       <div className="container px-4 py-8 max-w-6xl mx-auto">
         {/* Centered Title Section */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">Focus Flow</h1>
-          {selectedDate ? (
-            <div>
-              <p className="text-muted-foreground">
-                Viewing tasks for {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-              </p>
-              <button 
-                className="text-primary text-sm mt-1"
-                onClick={handleBackToToday}
-              >
-                Back to today
-              </button>
-            </div>
-          ) : (
-            <p className="text-muted-foreground">
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            </p>
-          )}
-        </div>
-
-        {/* Progress Card */}
-        {user && (
-          <Card className="animate-scale-in mb-6">
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-center">
-                <CardTitle className="text-lg font-medium">Today's Progress</CardTitle>
-                <div className="flex items-center gap-1">
-                  <span className="font-semibold">{Math.round(todayProgress)}%</span>
-                  <span className="text-sm text-muted-foreground">complete</span>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-muted/50 rounded-full h-2 mb-1">
-                <div 
-                  className="bg-primary rounded-full h-2 transition-all duration-700 ease-out"
-                  style={{ width: `${todayProgress}%` }}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <div>
-                  {todayCompleted} of {todayTasks.length} tasks completed
-                </div>
-                {todayCompleted === todayTasks.length && todayTasks.length > 0 && (
-                  <div className="flex items-center gap-1 text-primary">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    <span>All done for today!</span>
+                <h1 className="text-3xl font-bold mb-2">Focus Flow</h1>
+                {selectedDate ? (
+                  <div>
+                    <p className="text-muted-foreground">
+                      Viewing tasks for {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                    </p>
+                    <button 
+                      className="text-primary text-sm mt-1"
+                      onClick={handleBackToToday}
+                    >
+                      Back to today
+                    </button>
                   </div>
+                ) : (
+                  <p className="text-muted-foreground">
+                    {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                  </p>
                 )}
               </div>
-            </CardContent>
-          </Card>
-        )}
+              
+        {/* Progress Card */}
+        {user && (
+                  <Card className="animate-scale-in mb-6">
+                    <CardHeader className="pb-2">
+                      <div className="flex justify-between items-center">
+                        <CardTitle className="text-lg font-medium">Today's Progress</CardTitle>
+                        <div className="flex items-center gap-1">
+                          <span className="font-semibold">{Math.round(todayProgress)}%</span>
+                          <span className="text-sm text-muted-foreground">complete</span>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="bg-muted/50 rounded-full h-2 mb-1">
+                        <div 
+                          className="bg-primary rounded-full h-2 transition-all duration-700 ease-out"
+                          style={{ width: `${todayProgress}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <div>
+                          {todayCompleted} of {todayTasks.length} tasks completed
+                        </div>
+                        {todayCompleted === todayTasks.length && todayTasks.length > 0 && (
+                          <div className="flex items-center gap-1 text-primary">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            <span>All done for today!</span>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
         {/* Three Column Layout */}
         <div className="grid grid-cols-10 gap-6">
           {/* Calendar Column - 30% */}
           <div className="col-span-10 md:col-span-3">
             {user ? (
-              <Calendar 
-                progress={progress} 
-                streak={streak} 
-                onDateSelect={handleDateSelect}
-              />
+                    <Calendar 
+                      progress={progress} 
+                      streak={streak} 
+                      onDateSelect={handleDateSelect}
+                    />
             ) : (
               <Card>
                 <CardContent className="py-6">
@@ -909,7 +908,7 @@ const Index = () => {
                 </CardContent>
               </Card>
             )}
-          </div>
+                </div>
 
           {/* Tasks Column - 50% */}
           <div className="col-span-10 md:col-span-5">
@@ -927,7 +926,7 @@ const Index = () => {
                     <div className="space-y-1">
                       <h3 className="font-medium">Login Required</h3>
                       <p className="text-sm text-muted-foreground">Please login to create and manage tasks.</p>
-                    </div>
+              </div>
                     <Button
                       variant="outline"
                       onClick={() => setShowLoginDialog(true)}
@@ -935,7 +934,7 @@ const Index = () => {
                     >
                       Login to Continue
                     </Button>
-                  </div>
+            </div>
                 </CardContent>
               </Card>
             ) : null}
@@ -955,16 +954,16 @@ const Index = () => {
                 </CardContent>
               </Card>
             )}
-          </div>
-
+        </div>
+        
           {/* Bookmarks Column - 20% */}
           <div className="col-span-10 md:col-span-2">
             {user ? (
-              <BookmarkManager 
-                bookmarks={bookmarks}
-                onAddBookmark={handleAddBookmark}
-                onDeleteBookmark={handleDeleteBookmark}
-              />
+          <BookmarkManager 
+            bookmarks={bookmarks}
+            onAddBookmark={handleAddBookmark}
+            onDeleteBookmark={handleDeleteBookmark}
+          />
             ) : (
               <Card>
                 <CardContent className="py-6">
