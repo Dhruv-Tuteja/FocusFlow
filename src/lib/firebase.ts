@@ -19,10 +19,12 @@ import {
   serverTimestamp,
   writeBatch,
   collection,
-  getDocs
+  getDocs,
+  deleteDoc
 } from 'firebase/firestore';
 import { Task, DailyProgress, StreakData, Bookmark, TaskTag } from '@/types/task';
 import { getTodayDateString, isTaskDueToday } from '@/utils/taskUtils';
+import { FirebaseError } from 'firebase/app';
 
 // Your Firebase configuration
 const firebaseConfig = {
@@ -191,85 +193,73 @@ export const getUserData = async (userId: string) => {
 };
 
 // Tasks
-export const saveTasks = async (userId: string, tasks: Task[]) => {
-  try {
-    console.log('[CRITICAL] Saving tasks to Firestore:', tasks.length, 'tasks for user', userId);
-    
-    if (!userId) {
-      console.error('Cannot save tasks: User ID is null or undefined');
-      return { success: false, error: 'User ID is required' };
-    }
-    
-    // Check for tasks with future dates to help debug
-    const today = getTodayDateString();
-    const pastTasks = tasks.filter(t => t.dueDate < today);
-    const todayTasks = tasks.filter(t => t.dueDate === today || (t.recurrence && isTaskDueToday(t)));
-    console.log(`Task breakdown: ${pastTasks.length} past tasks, ${todayTasks.length} today's tasks`);
-    
-    // IMPORTANT: Save the ENTIRE array of tasks to ensure historical tasks are preserved
-    // Remove undefined values from tasks
-    const cleanedTasks = removeUndefinedValues(tasks);
-    
-    // Check if user document exists
-    const userDoc = await getDoc(doc(db, 'users', userId));
-    
-    if (!userDoc.exists()) {
-      // Create the document with tasks if it doesn't exist
-      console.log('Creating new user document with tasks');
-      await setDoc(doc(db, 'users', userId), { 
-        tasks: cleanedTasks,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-    } else {
-      // Update existing document
-      console.log('Updating existing user document with tasks');
-      try {
-        await updateDoc(doc(db, 'users', userId), { 
-          tasks: cleanedTasks,
-          updatedAt: serverTimestamp()
-        });
-      } catch (updateError) {
-        console.error('Error during updateDoc operation:', updateError);
-        // If update fails, try setDoc as a fallback, but preserve existing data
-        console.log('Attempting setDoc as fallback...');
-        const existingData = userDoc.data() || {};
-        await setDoc(doc(db, 'users', userId), { 
-          ...existingData,
-          tasks: cleanedTasks,
-          updatedAt: serverTimestamp()
-        });
-      }
-    }
-    
-    // Verify the save was successful
-    const verifyDoc = await getDoc(doc(db, 'users', userId));
-    if (verifyDoc.exists() && verifyDoc.data().tasks) {
-      const savedTasks = verifyDoc.data().tasks;
-      const pastTasksAfterSave = savedTasks.filter((t: Task) => t.dueDate < today);
-      
-      console.log('Tasks saved and verified successfully. Count:', savedTasks.length);
-      console.log(`Saved past tasks: ${pastTasksAfterSave.length} (should match ${pastTasks.length})`);
-      
-      if (pastTasksAfterSave.length < pastTasks.length) {
-        console.warn('WARNING: Some past tasks may have been lost!');
-        console.warn('Original past tasks:', pastTasks.length);
-        console.warn('Saved past tasks:', pastTasksAfterSave.length);
-      }
-      
-      return { success: true };
-    } else {
-      console.error('Tasks were not saved properly');
-      return { success: false, error: 'Tasks were not saved properly' };
-    }
-  } catch (error: unknown) {
-    console.error('Error saving tasks:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : String(error)
-    };
+export async function saveTasks(userId: string, tasks: Task[]): Promise<SaveResult> {
+  if (!userId) {
+    console.error('[CRITICAL ERROR] Cannot save tasks: userId is missing');
+    return { success: false, error: 'User ID is required' };
   }
-};
+
+  try {
+    console.log(`[FIREBASE] Saving ${tasks.length} tasks for user ${userId.substring(0, 5)}...`);
+    
+    // Get a reference to the user document
+    const userRef = doc(db, "users", userId);
+    
+    // Save tasks to Firestore
+    await updateDoc(userRef, {
+      tasks: tasks
+    });
+    
+    console.log(`[FIREBASE] Tasks saved successfully for user ${userId.substring(0, 5)}`);
+    return { success: true };
+  } catch (error: any) {
+    console.error('[CRITICAL ERROR] Error saving tasks to Firestore:', error);
+    
+    // If it's a document too large error, try again with chunking
+    if (error?.code === 'firestore/invalid-argument') {
+      try {
+        console.log('[FIREBASE] Document too large, attempting alternative saving method');
+        // Get a reference to the user document
+        const userRef = doc(db, "users", userId);
+        
+        // Chunk the tasks - maximum of 100 tasks per chunk
+        const taskChunks: Task[][] = [];
+        for (let i = 0; i < tasks.length; i += 100) {
+          taskChunks.push(tasks.slice(i, i + 100));
+        }
+        
+        // Save task count and clear existing tasks
+        await updateDoc(userRef, {
+          taskCount: tasks.length,
+          tasks: []
+        });
+        
+        // Create subcollection for tasks
+        const tasksCollectionRef = collection(userRef, "taskChunks");
+        
+        // Delete any existing chunks
+        const existingChunks = await getDocs(tasksCollectionRef);
+        const deletePromises = existingChunks.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(deletePromises);
+        
+        // Save tasks in chunks
+        const chunkPromises = taskChunks.map((chunk, index) => {
+          const chunkDocRef = doc(tasksCollectionRef, `chunk_${index}`);
+          return setDoc(chunkDocRef, { tasks: chunk });
+        });
+        
+        await Promise.all(chunkPromises);
+        console.log(`[FIREBASE] Tasks saved in ${taskChunks.length} chunks for user ${userId.substring(0, 5)}`);
+        return { success: true };
+      } catch (chunkError) {
+        console.error('[CRITICAL ERROR] Error saving tasks in chunks:', chunkError);
+        return { success: false, error: 'Failed to save tasks in chunks' };
+      }
+    }
+    
+    return { success: false, error: 'Failed to save tasks' };
+  }
+}
 
 // Load tasks with new structure
 export const loadTasks = async (userId: string) => {
@@ -459,68 +449,80 @@ export const saveStreak = async (userId: string, streak: StreakData) => {
   }
 };
 
+// Add this interface if it doesn't exist
+interface SaveResult {
+  success: boolean;
+  error?: string;
+}
+
 // Bookmarks
-export const saveBookmarks = async (userId: string, bookmarks: Bookmark[]) => {
+export async function saveBookmarks(userId: string, bookmarks: Bookmark[]): Promise<SaveResult> {
+  if (!userId) {
+    console.error('[CRITICAL ERROR] Cannot save bookmarks: userId is missing');
+    return { success: false, error: 'User ID is required' };
+  }
+
   try {
-    console.log('[CRITICAL] Saving bookmarks to Firestore:', bookmarks.length, 'bookmarks for user', userId);
+    console.log(`[FIREBASE] Saving ${bookmarks.length} bookmarks for user ${userId.substring(0, 5)}...`);
     
-    if (!userId) {
-      console.error('Cannot save bookmarks: User ID is null or undefined');
-      return { success: false, error: 'User ID is required' };
-    }
+    // Get a reference to the user document
+    const userRef = doc(db, "users", userId);
     
-    // Remove undefined values from bookmarks
-    const cleanedBookmarks = removeUndefinedValues(bookmarks);
+    // Save bookmarks to Firestore
+    await updateDoc(userRef, {
+      bookmarks: bookmarks
+    });
     
-    // Check if user document exists
-    const userDoc = await getDoc(doc(db, 'users', userId));
+    console.log(`[FIREBASE] Bookmarks saved successfully for user ${userId.substring(0, 5)}`);
+    return { success: true };
+  } catch (error: any) {
+    console.error('[CRITICAL ERROR] Error saving bookmarks to Firestore:', error);
     
-    if (!userDoc.exists()) {
-      // Create the document with bookmarks if it doesn't exist
-      console.log('Creating new user document with bookmarks');
-      await setDoc(doc(db, 'users', userId), { 
-        bookmarks: cleanedBookmarks,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-    } else {
-      // Update existing document
-      console.log('Updating existing user document with bookmarks');
+    // If it's a document too large error, try again with chunking
+    if (error?.code === 'firestore/invalid-argument') {
       try {
-        await updateDoc(doc(db, 'users', userId), { 
-          bookmarks: cleanedBookmarks,
-          updatedAt: serverTimestamp()
+        console.log('[FIREBASE] Document too large, attempting alternative saving method');
+        // Get a reference to the user document
+        const userRef = doc(db, "users", userId);
+        
+        // Chunk the bookmarks - maximum of 100 bookmarks per chunk
+        const bookmarkChunks: Bookmark[][] = [];
+        for (let i = 0; i < bookmarks.length; i += 100) {
+          bookmarkChunks.push(bookmarks.slice(i, i + 100));
+        }
+        
+        // Save bookmark count and clear existing bookmarks
+        await updateDoc(userRef, {
+          bookmarkCount: bookmarks.length,
+          bookmarks: []
         });
-      } catch (updateError) {
-        console.error('Error during updateDoc operation:', updateError);
-        // If update fails, try setDoc as a fallback, but preserve existing data
-        console.log('Attempting setDoc as fallback...');
-        const existingData = userDoc.data() || {};
-        await setDoc(doc(db, 'users', userId), { 
-          ...existingData,
-          bookmarks: cleanedBookmarks,
-          updatedAt: serverTimestamp()
+        
+        // Create subcollection for bookmarks
+        const bookmarksCollectionRef = collection(userRef, "bookmarkChunks");
+        
+        // Delete any existing chunks
+        const existingChunks = await getDocs(bookmarksCollectionRef);
+        const deletePromises = existingChunks.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(deletePromises);
+        
+        // Save bookmarks in chunks
+        const chunkPromises = bookmarkChunks.map((chunk, index) => {
+          const chunkDocRef = doc(bookmarksCollectionRef, `chunk_${index}`);
+          return setDoc(chunkDocRef, { bookmarks: chunk });
         });
+        
+        await Promise.all(chunkPromises);
+        console.log(`[FIREBASE] Bookmarks saved in ${bookmarkChunks.length} chunks for user ${userId.substring(0, 5)}`);
+        return { success: true };
+      } catch (chunkError) {
+        console.error('[CRITICAL ERROR] Error saving bookmarks in chunks:', chunkError);
+        return { success: false, error: 'Failed to save bookmarks in chunks' };
       }
     }
     
-    // Verify the save was successful
-    const verifyDoc = await getDoc(doc(db, 'users', userId));
-    if (verifyDoc.exists() && verifyDoc.data().bookmarks) {
-      console.log('Bookmarks saved and verified successfully. Count:', verifyDoc.data().bookmarks.length);
-      return { success: true };
-    } else {
-      console.error('Bookmarks were not saved properly');
-      return { success: false, error: 'Bookmarks were not saved properly' };
-    }
-  } catch (error: unknown) {
-    console.error('Error saving bookmarks:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : String(error)
-    };
+    return { success: false, error: 'Failed to save bookmarks' };
   }
-};
+}
 
 // Load bookmarks with new structure
 export const loadBookmarks = async (userId: string) => {
