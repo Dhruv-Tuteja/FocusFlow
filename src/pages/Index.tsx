@@ -130,147 +130,87 @@ const Index = () => {
 
   // Load user data when user changes
   useEffect(() => {
-    const loadUserData = async () => {
-      // Log the current date at initialization
-      const currentDate = getTodayDateString();
-      console.log('Current date at app initialization:', currentDate);
+    const loadUserData = async (userId: string) => {
+      console.log(`[${new Date().toLocaleTimeString()}] Loading user data for user:`, userId);
       
-      if (!user) {
-        // Reset all data if no user is logged in
-        setTasks([]);
-        setProgress([]);
-        setStreak({
-          currentStreak: 0,
-          longestStreak: 0,
-          lastCompletionDate: null,
-        });
-        setTags([]);
-        setBookmarks([]);
-        setIsLoading(false);
-        return;
-      }
-
-      setIsLoading(true);
       try {
-        console.log('Loading user data from Firestore...');
-        const result = await getUserData(user.uid);
-        if (result.success && result.data) {
-          console.log('User data loaded successfully:', result.data);
-
-          // Set tasks - CRITICALLY IMPORTANT: Keep original task data from Firestore
-          const loadedTasks = result.data.tasks || [];
-          console.log('Setting tasks:', loadedTasks.length);
-          setTasks(loadedTasks);
-          
-          // Set progress
-          const loadedProgress = result.data.progress || [];
-          console.log('Setting progress:', loadedProgress.length);
-          
-          // Rebuild missing progress entries
-          const updatedProgress = rebuildProgressData(loadedTasks, loadedProgress);
-          
-          if (updatedProgress.length !== loadedProgress.length) {
-            console.log('Progress data was updated. New length:', updatedProgress.length);
-            console.log('Saving updated progress data...');
-            setProgress(updatedProgress);
-            await saveProgress(user.uid, updatedProgress);
-          } else {
-            setProgress(loadedProgress);
-          }
-          
-          // Set streak
-          const loadedStreak = result.data.streak || {
-            currentStreak: 0,
-            longestStreak: 0,
-            lastCompletionDate: null,
+        // Use the updated getUserData function to get data from the new structure
+        const response = await getUserData(userId);
+        
+        if (response.success) {
+          // Add type assertion to resolve TypeScript errors
+          const userData = response.data as {
+            tasks?: Task[],
+            bookmarks?: Bookmark[],
+            progress?: DailyProgress[],
+            streak?: StreakData,
+            tags?: TaskTag[]
           };
-          console.log('Setting streak:', loadedStreak);
-          setStreak(loadedStreak);
           
-          // Set tags
-          const loadedTags = result.data.tags || [];
-          
-          // If user has no tags, create default tags
-          if (loadedTags.length === 0) {
-            console.log('No tags found, creating default tags');
-            const defaultTags = [
-              { id: "1", name: "Work", color: "#4C51BF" },
-              { id: "2", name: "Personal", color: "#38A169" },
-              { id: "3", name: "Health", color: "#E53E3E" },
-              { id: "4", name: "Learning", color: "#D69E2E" },
-              { id: "5", name: "Family", color: "#DD6B20" },
-              { id: "6", name: "Home", color: "#805AD5" },
-              { id: "7", name: "Finance", color: "#2F855A" },
-              { id: "8", name: "Urgent", color: "#F56565" },
-              { id: "9", name: "Hobby", color: "#4299E1" },
-              { id: "10", name: "Social", color: "#ED64A6" },
-            ];
-            
-            setTags(defaultTags);
-            await saveTags(user.uid, defaultTags);
-            console.log('Default tags created and saved');
-          } else {
-            console.log('Setting tags:', loadedTags.length);
-            setTags(loadedTags);
-          }
-          
-          // Set bookmarks - CRITICALLY IMPORTANT: Keep original bookmark data from Firestore
-          const loadedBookmarks = result.data.bookmarks || [];
-          console.log('Setting bookmarks:', loadedBookmarks.length);
-          setBookmarks(loadedBookmarks);
-          
-          // Initialize today's progress data if we have tasks but no progress for today
-          const today = getTodayDateString();
-          const todaysTasksFromLoaded = loadedTasks.filter((task: Task) => 
-            task.dueDate === today || 
-            (task.recurrence && isTaskDueToday(task))
+          console.log(`[${new Date().toLocaleTimeString()}] Successfully loaded user data:`, 
+            {
+              tasksCount: userData.tasks?.length || 0,
+              bookmarksCount: userData.bookmarks?.length || 0,
+              progressCount: userData.progress?.length || 0
+            }
           );
           
-          // If we have tasks for today but no progress entry, create one immediately
-          if (todaysTasksFromLoaded.length > 0 && !loadedProgress.some((p: DailyProgress) => p.date === today)) {
-            console.log('We have tasks for today but no progress entry. Creating one now.');
+          // Update state with the loaded data
+          setTasks(userData.tasks || []);
+          setBookmarks(userData.bookmarks || []);
+          setProgress(userData.progress || []);
+          setStreak(userData.streak || { currentStreak: 0, longestStreak: 0, lastCompletionDate: null });
+          setTags(userData.tags || []);
+          
+          // After loading data, check if we need to rebuild progress
+          if (userData.tasks && userData.tasks.length > 0 && userData.progress) {
+            const updatedProgress = rebuildProgressData(userData.tasks, userData.progress);
             
-            const todayCompleted = todaysTasksFromLoaded.filter((t: Task) => t.status === "completed").length;
-            const todayCompletion = todayCompleted / todaysTasksFromLoaded.length;
-            
-            const newProgressEntry: DailyProgress = {
-              date: today,
-              tasksCompleted: todayCompleted,
-              tasksPlanned: todaysTasksFromLoaded.length,
-              completion: todayCompletion,
-              tasks: todaysTasksFromLoaded
-            };
-            
-            const updatedProgress = [...loadedProgress, newProgressEntry];
-            console.log('Immediately saving new progress entry:', newProgressEntry);
-            setProgress(updatedProgress);
-            
-            // Save the new progress entry to Firestore
-            await saveProgress(user.uid, updatedProgress);
+            // If progress was updated, save it back to the database
+            if (updatedProgress.length !== userData.progress.length) {
+              console.log(`Progress data was updated: ${userData.progress.length} -> ${updatedProgress.length} entries`);
+              setProgress(updatedProgress);
+              
+              // Save the updated progress
+              await saveProgress(userId, updatedProgress);
+            }
           }
           
-          console.log('User data set successfully');
+          return true;
         } else {
-          console.error('Failed to load user data:', result);
+          console.error("Error loading user data:", response.error);
           toast({
             title: "Error",
-            description: "Failed to load your data. Please try again.",
+            description: `Error loading data: ${response.error}`,
             variant: "destructive",
           });
+          return false;
         }
       } catch (error) {
-        console.error('Error loading user data:', error);
+        console.error("Exception while loading user data:", error);
         toast({
           title: "Error",
           description: "Failed to load your data. Please try again.",
           variant: "destructive",
         });
-      } finally {
-        setIsLoading(false);
+        return false;
       }
     };
 
-    loadUserData();
+    if (user) {
+      loadUserData(user.uid);
+    } else {
+      setTasks([]);
+      setProgress([]);
+      setStreak({
+        currentStreak: 0,
+        longestStreak: 0,
+        lastCompletionDate: null,
+      });
+      setTags([]);
+      setBookmarks([]);
+      setIsLoading(false);
+    }
   }, [user, toast]);
 
   // Check for day change and handle recurring tasks
@@ -479,90 +419,128 @@ const Index = () => {
     updateDailyProgress();
   }, [user, tasks, todayTasks, progress, streak]);
 
-  const handleAddTask = async (task: Task) => {
+  const handleTaskCreate = async (task: Task) => {
     if (!user) {
       toast({
-        title: "Login Required",
-        description: "Please log in to add tasks.",
+        title: "Error",
+        description: "You must be logged in to create tasks",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    console.log('Creating new task:', task);
+    
+    const newTasks = [...tasks, task];
+    setTasks(newTasks);
+    
+    try {
+      const result = await saveTasks(user.uid, newTasks);
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: "Task created successfully",
+        });
+      } else {
+        console.error('Failed to save task:', result.error);
+        toast({
+          title: "Error",
+          description: "Failed to save task. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error saving task:', error);
+      toast({
+        title: "Error",
+        description: "An error occurred while saving the task",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleTaskUpdate = async (updatedTask: Task) => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to update tasks",
         variant: "destructive",
       });
       return;
     }
     
-    try {
-      console.log('Adding task:', task);
-      const updatedTasks = [...tasks, task];
-      
-      // Update local state first
-      setTasks(updatedTasks);
-      
-      // Use regular saveTasks method
-      console.log('Saving tasks to Firestore...');
-      const result = await saveTasks(user.uid, updatedTasks);
-      console.log('Save result:', result);
-      
-      if (!result.success) {
-        throw new Error('Failed to save task');
-      }
-      
-      // Immediately update progress data for today after adding a task
-      const today = getTodayDateString();
-      const allTodayTasksAfterAdd = updatedTasks.filter(t => 
-        t.dueDate === today || 
-        (t.recurrence && isTaskDueToday(t))
-      );
-      const completedTasksAfterAdd = allTodayTasksAfterAdd.filter(t => t.status === "completed");
-      const completionAfterAdd = allTodayTasksAfterAdd.length > 0 
-        ? completedTasksAfterAdd.length / allTodayTasksAfterAdd.length 
-        : 0;
-      
-      // Update today's progress in the progress array
-      const existingProgressEntry = progress.find(p => p.date === today);
-      let updatedProgress: DailyProgress[];
-      
-      if (existingProgressEntry) {
-        updatedProgress = progress.map(p =>
-          p.date === today
-            ? {
-                ...p,
-                tasksCompleted: completedTasksAfterAdd.length,
-                tasksPlanned: allTodayTasksAfterAdd.length,
-                completion: completionAfterAdd,
-                tasks: allTodayTasksAfterAdd,
-              }
-            : p
-        );
-      } else {
-        updatedProgress = [
-          ...progress,
-          {
-            date: today,
-            tasksCompleted: completedTasksAfterAdd.length,
-            tasksPlanned: allTodayTasksAfterAdd.length,
-            completion: completionAfterAdd,
-            tasks: allTodayTasksAfterAdd,
-          },
-        ];
-      }
-      
-      // Update state and save to Firebase
-      setProgress(updatedProgress);
-      await saveProgress(user.uid, updatedProgress);
-      
-      // Update UI state variables directly
-      setTodayTasks(allTodayTasksAfterAdd);
-      setTodayCompleted(completedTasksAfterAdd.length);
-      setTodayProgress(completionAfterAdd * 100);
+    console.log('Updating task:', updatedTask);
     
-      toast({
-        title: "Task added",
-        description: `"${task.title}" has been added to your tasks.`,
-      });
+    // Find the task to update
+    const updatedTasks = tasks.map((task) =>
+      task.id === updatedTask.id ? updatedTask : task
+    );
+    
+    setTasks(updatedTasks);
+    
+    try {
+      const result = await saveTasks(user.uid, updatedTasks);
+      if (result.success) {
+        // Only show toast for status changes
+        if (updatedTask.status === "completed") {
+          toast({
+            title: "Success",
+            description: "Task completed! Great job! 🎉",
+          });
+        }
+      } else {
+        console.error('Failed to update task:', result.error);
+        toast({
+          title: "Error",
+          description: "Failed to update task. Please try again.",
+          variant: "destructive",
+        });
+      }
     } catch (error) {
-      console.error('Error adding task:', error);
+      console.error('Error updating task:', error);
       toast({
         title: "Error",
-        description: "Failed to save your task. Please try again.",
+        description: "An error occurred while updating the task",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleTaskDelete = async (taskId: string) => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to delete tasks",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    console.log('Deleting task:', taskId);
+    
+    const updatedTasks = tasks.filter((task) => task.id !== taskId);
+    setTasks(updatedTasks);
+    
+    try {
+      const result = await saveTasks(user.uid, updatedTasks);
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: "Task deleted successfully",
+        });
+      } else {
+        console.error('Failed to delete task:', result.error);
+        toast({
+          title: "Error",
+          description: "Failed to delete task. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      toast({
+        title: "Error",
+        description: "An error occurred while deleting the task",
         variant: "destructive",
       });
     }
@@ -612,190 +590,6 @@ const Index = () => {
     }
   };
 
-  const handleUpdateTask = async (updatedTask: Task) => {
-    if (!user) return;
-    
-    try {
-      console.log('Updating task:', updatedTask.id);
-      
-      // Check if the task is from a past date and not due today
-      const taskToUpdate = tasks.find(t => t.id === updatedTask.id);
-      const today = getTodayDateString();
-      
-      if (taskToUpdate && 
-          taskToUpdate.dueDate < today && 
-          !(taskToUpdate.recurrence && isTaskDueToday(taskToUpdate))) {
-        console.log('Cannot edit tasks from past dates');
-        toast({
-          title: "Cannot edit",
-          description: "Tasks from previous days cannot be edited.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-    const updatedTasks = tasks.map(task =>
-      task.id === updatedTask.id ? updatedTask : task
-    );
-      
-    setTasks(updatedTasks);
-      const result = await saveTasks(user.uid, updatedTasks);
-      if (!result.success) {
-        throw new Error('Failed to update task');
-      }
-    } catch (error) {
-      console.error('Error updating task:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update your task. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleCompleteTask = async (taskId: string) => {
-    if (!user) return;
-    
-    try {
-      console.log('Completing task:', taskId);
-    const task = tasks.find(t => t.id === taskId);
-      if (!task) {
-        console.error('Task not found:', taskId);
-        return;
-      }
-
-      const today = getTodayDateString();
-      
-      // Check if the task is from a past date and not due today
-      if (task.dueDate < today && !(task.recurrence && isTaskDueToday(task))) {
-        console.log('Cannot update tasks from past dates');
-        toast({
-          title: "Cannot update",
-          description: "Tasks from previous days cannot be modified.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-    const newStatus: TaskStatus = task.status === "completed" ? "pending" : "completed";
-    
-    let updatedTasks = tasks.map(t =>
-      t.id === taskId
-        ? {
-            ...t,
-            status: newStatus,
-          }
-        : t
-    );
-    
-    if (newStatus === "completed" && task.recurrence && task.recurrence.pattern !== "once") {
-      updatedTasks = updateRecurringTask(task, updatedTasks);
-    }
-
-    setTasks(updatedTasks);
-      const result = await saveTasks(user.uid, updatedTasks);
-      if (!result.success) {
-        throw new Error('Failed to update task status');
-      }
-
-      // Immediately update progress data for today after completing a task
-      const allTodayTasksAfterComplete = updatedTasks.filter(t => 
-        t.dueDate === today || 
-        (t.recurrence && isTaskDueToday(t))
-      );
-      const completedTasksAfterComplete = allTodayTasksAfterComplete.filter(t => t.status === "completed");
-      const completionAfterComplete = allTodayTasksAfterComplete.length > 0 
-        ? completedTasksAfterComplete.length / allTodayTasksAfterComplete.length 
-        : 0;
-      
-      // Update today's progress in the progress array
-      const existingProgressEntry = progress.find(p => p.date === today);
-      let updatedProgress: DailyProgress[];
-      
-      if (existingProgressEntry) {
-        updatedProgress = progress.map(p =>
-          p.date === today
-            ? {
-                ...p,
-                tasksCompleted: completedTasksAfterComplete.length,
-                tasksPlanned: allTodayTasksAfterComplete.length,
-                completion: completionAfterComplete,
-                tasks: allTodayTasksAfterComplete,
-              }
-            : p
-        );
-      } else {
-        updatedProgress = [
-          ...progress,
-          {
-            date: today,
-            tasksCompleted: completedTasksAfterComplete.length,
-            tasksPlanned: allTodayTasksAfterComplete.length,
-            completion: completionAfterComplete,
-            tasks: allTodayTasksAfterComplete,
-          },
-        ];
-      }
-      
-      // Update state and save to Firebase
-      setProgress(updatedProgress);
-      await saveProgress(user.uid, updatedProgress);
-      
-      // Update UI state variables directly
-      setTodayTasks(allTodayTasksAfterComplete);
-      setTodayCompleted(completedTasksAfterComplete.length);
-      setTodayProgress(completionAfterComplete * 100);
-
-    if (newStatus === "completed") {
-      toast({
-        title: "Task completed",
-        description: `"${task.title}" has been marked as completed.`,
-        });
-      }
-    } catch (error) {
-      console.error('Error completing task:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update task status. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDeleteTask = async (taskId: string) => {
-    if (!user) return;
-    
-    try {
-      console.log('Deleting task:', taskId);
-    const task = tasks.find(t => t.id === taskId);
-      if (!task) {
-        console.error('Task not found:', taskId);
-        return;
-      }
-
-    const updatedTasks = tasks.filter(t => t.id !== taskId);
-      
-    setTasks(updatedTasks);
-      const result = await saveTasks(user.uid, updatedTasks);
-      if (!result.success) {
-        throw new Error('Failed to delete task');
-      }
-
-    toast({
-      title: "Task deleted",
-      description: `"${task.title}" has been deleted.`,
-      variant: "destructive",
-    });
-    } catch (error) {
-      console.error('Error deleting task:', error);
-    toast({
-        title: "Error",
-        description: "Failed to delete task. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
   const handleDateSelect = (date: string) => {
     setSelectedDate(date);
     
@@ -833,108 +627,159 @@ const Index = () => {
   };
 
   const handleAddBookmark = async (bookmark: Bookmark) => {
-    if (!user) return;
-    
-    try {
-      console.log('Adding bookmark:', bookmark.title);
-      const updatedBookmarks = [...bookmarks, bookmark];
-      
-      // Update state
-      setBookmarks(updatedBookmarks);
-      
-      // Use regular saveBookmarks method
-      const result = await saveBookmarks(user.uid, updatedBookmarks);
-      if (!result.success) {
-        throw new Error('Failed to save bookmark');
-      }
-      
-      toast({
-        title: "Bookmark added",
-        description: `"${bookmark.title}" has been added to your bookmarks.`,
-      });
-    } catch (error) {
-      console.error('Error adding bookmark:', error);
+    if (!user) {
       toast({
         title: "Error",
-        description: "Failed to save your bookmark. Please try again.",
+        description: "You must be logged in to add bookmarks",
         variant: "destructive",
       });
+      return;
     }
-  };
-
-  const handleDeleteBookmark = async (bookmarkId: string) => {
-    if (!user) return;
+    
+    console.log('Adding bookmark:', bookmark);
+    
+    const newBookmarks = [...bookmarks, bookmark];
+    setBookmarks(newBookmarks);
     
     try {
-      console.log('Deleting bookmark:', bookmarkId);
-      const bookmark = bookmarks.find(b => b.id === bookmarkId);
-      if (!bookmark) {
-        console.error('Bookmark not found:', bookmarkId);
-        return;
+      const result = await saveBookmarks(user.uid, newBookmarks);
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: "Bookmark added successfully",
+        });
+      } else {
+        console.error('Failed to save bookmark:', result.error);
+        toast({
+          title: "Error",
+          description: "Failed to save bookmark. Please try again.",
+          variant: "destructive",
+        });
       }
-      
-    const updatedBookmarks = bookmarks.filter(b => b.id !== bookmarkId);
-    
-    // Update state
-    setBookmarks(updatedBookmarks);
-    
-    // Use regular saveBookmarks method
-    const result = await saveBookmarks(user.uid, updatedBookmarks);
-    if (!result.success) {
-      throw new Error('Failed to delete bookmark');
-    }
-    
-    toast({
-      title: "Bookmark deleted",
-      description: "The bookmark has been removed.",
-      variant: "destructive",
-    });
     } catch (error) {
-      console.error('Error deleting bookmark:', error);
+      console.error('Error saving bookmark:', error);
       toast({
         title: "Error",
-        description: "Failed to delete bookmark. Please try again.",
+        description: "An error occurred while saving the bookmark",
         variant: "destructive",
       });
     }
   };
 
   const handleEditBookmark = async (updatedBookmark: Bookmark) => {
-    if (!user) return;
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to edit bookmarks",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    console.log('Editing bookmark:', updatedBookmark);
+    
+    // Find and update the bookmark
+    const updatedBookmarks = bookmarks.map((bookmark) =>
+      bookmark.id === updatedBookmark.id ? updatedBookmark : bookmark
+    );
+    
+    setBookmarks(updatedBookmarks);
     
     try {
-      console.log('Editing bookmark:', updatedBookmark.id);
-      const bookmarkIndex = bookmarks.findIndex(b => b.id === updatedBookmark.id);
-      
-      if (bookmarkIndex === -1) {
-        console.error('Bookmark not found:', updatedBookmark.id);
-        return;
-      }
-      
-      const updatedBookmarks = [...bookmarks];
-      updatedBookmarks[bookmarkIndex] = updatedBookmark;
-      
-      // Update state
-      setBookmarks(updatedBookmarks);
-      
-      // Use regular saveBookmarks method
       const result = await saveBookmarks(user.uid, updatedBookmarks);
-      if (!result.success) {
-        throw new Error('Failed to update bookmark');
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: "Bookmark updated successfully",
+        });
+      } else {
+        console.error('Failed to update bookmark:', result.error);
+        toast({
+          title: "Error",
+          description: "Failed to update bookmark. Please try again.",
+          variant: "destructive",
+        });
       }
-      
-      toast({
-        title: "Bookmark updated",
-        description: `"${updatedBookmark.title}" has been updated.`,
-      });
     } catch (error) {
       console.error('Error updating bookmark:', error);
       toast({
         title: "Error",
-        description: "Failed to update bookmark. Please try again.",
+        description: "An error occurred while updating the bookmark",
         variant: "destructive",
       });
     }
+  };
+
+  const handleDeleteBookmark = async (bookmarkId: string) => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to delete bookmarks",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    console.log('Deleting bookmark:', bookmarkId);
+    
+    const updatedBookmarks = bookmarks.filter((bookmark) => bookmark.id !== bookmarkId);
+    setBookmarks(updatedBookmarks);
+    
+    try {
+      const result = await saveBookmarks(user.uid, updatedBookmarks);
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: "Bookmark deleted successfully",
+        });
+      } else {
+        console.error('Failed to delete bookmark:', result.error);
+        toast({
+          title: "Error",
+          description: "Failed to delete bookmark. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting bookmark:', error);
+      toast({
+        title: "Error",
+        description: "An error occurred while deleting the bookmark",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCompleteTask = async (taskId: string) => {
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to complete tasks",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    console.log('Completing task:', taskId);
+    
+    // Find the task to update
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) {
+      console.error('Task not found:', taskId);
+      return;
+    }
+    
+    // Toggle the status
+    const newStatus: TaskStatus = task.status === "completed" ? "pending" : "completed";
+    
+    // Create updated task
+    const updatedTask = {
+      ...task,
+      status: newStatus
+    };
+    
+    // Use the existing task update function
+    handleTaskUpdate(updatedTask);
   };
 
   // Update the account dropdown menu
@@ -1107,7 +952,7 @@ const Index = () => {
           <div className="col-span-10 md:col-span-5">
             {!selectedDate && user ? (
               <TaskForm 
-                onAddTask={handleAddTask} 
+                onAddTask={handleTaskCreate} 
                 availableTags={tags} 
                 onAddTag={handleAddTag}
               />
@@ -1134,9 +979,9 @@ const Index = () => {
             <TaskList
               tasks={user ? tasks : []}
               selectedDate={selectedDate || undefined}
-              onUpdateTask={handleUpdateTask}
+              onUpdateTask={handleTaskUpdate}
               onCompleteTask={handleCompleteTask}
-              onDeleteTask={handleDeleteTask}
+              onDeleteTask={handleTaskDelete}
             />
             {!user && (
               <Card className="mt-4">

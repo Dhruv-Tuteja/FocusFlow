@@ -44,3 +44,4 @@ firebaseConfig.ts
 # Build artifacts
 build/
 coverage/
+.vercel
