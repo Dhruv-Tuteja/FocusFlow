@@ -179,6 +179,73 @@ const Index = () => {
     loadUserData();
   }, [user, toast]);
 
+  // Check for day change and handle recurring tasks
+  useEffect(() => {
+    if (!user || tasks.length === 0) return;
+    
+    console.log('Checking for tasks that should reset for today...');
+    
+    const today = getTodayDateString();
+    
+    // Get the last date the app was used (check progress)
+    let lastUsedDate: string | null = null;
+    if (progress.length > 0) {
+      // Sort progress entries by date in descending order
+      const sortedProgress = [...progress].sort((a, b) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+      
+      lastUsedDate = sortedProgress[0].date;
+    }
+    
+    console.log('Last used date:', lastUsedDate);
+    console.log('Current date:', today);
+    
+    // If this is a new day, or no last date found, check for recurring tasks
+    if (!lastUsedDate || lastUsedDate < today) {
+      console.log('New day detected. Checking for recurring tasks...');
+      
+      // Filter tasks that recur today
+      const recurringTasksDueToday = tasks.filter(task => 
+        task.recurrence && 
+        isTaskDueToday(task) && 
+        task.dueDate !== today
+      );
+      
+      console.log('Found recurring tasks due today:', recurringTasksDueToday.length);
+      
+      if (recurringTasksDueToday.length > 0) {
+        // Create updated tasks with reset statuses for today
+        const updatedTasks = [...tasks];
+        
+        recurringTasksDueToday.forEach(task => {
+          // Create a new version of this task for today
+          const resetTask: Task = {
+            ...task,
+            id: task.id, // Keep same ID to avoid duplicates
+            dueDate: today,
+            status: 'pending' // Reset status to pending
+          };
+          
+          // Find task's index and update it
+          const taskIndex = updatedTasks.findIndex(t => t.id === task.id);
+          if (taskIndex !== -1) {
+            updatedTasks[taskIndex] = resetTask;
+          }
+        });
+        
+        // Update tasks in state and Firestore
+        setTasks(updatedTasks);
+        saveTasks(user.uid, updatedTasks);
+        
+        toast({
+          title: "Tasks reset",
+          description: `${recurringTasksDueToday.length} recurring tasks reset for today.`,
+        });
+      }
+    }
+  }, [user, tasks, progress]);
+
   // Calculate today's tasks and progress
   useEffect(() => {
     const calculateTodayProgress = () => {
@@ -441,6 +508,23 @@ const Index = () => {
     
     try {
       console.log('Updating task:', updatedTask.id);
+      
+      // Check if the task is from a past date and not due today
+      const taskToUpdate = tasks.find(t => t.id === updatedTask.id);
+      const today = getTodayDateString();
+      
+      if (taskToUpdate && 
+          taskToUpdate.dueDate < today && 
+          !(taskToUpdate.recurrence && isTaskDueToday(taskToUpdate))) {
+        console.log('Cannot edit tasks from past dates');
+        toast({
+          title: "Cannot edit",
+          description: "Tasks from previous days cannot be edited.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       const updatedTasks = tasks.map(task =>
         task.id === updatedTask.id ? updatedTask : task
       );
@@ -471,6 +555,19 @@ const Index = () => {
         return;
       }
 
+      const today = getTodayDateString();
+      
+      // Check if the task is from a past date and not due today
+      if (task.dueDate < today && !(task.recurrence && isTaskDueToday(task))) {
+        console.log('Cannot update tasks from past dates');
+        toast({
+          title: "Cannot update",
+          description: "Tasks from previous days cannot be modified.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const newStatus: TaskStatus = task.status === "completed" ? "pending" : "completed";
       
       let updatedTasks = tasks.map(t =>
@@ -493,7 +590,6 @@ const Index = () => {
       }
 
       // Immediately update progress data for today after completing a task
-      const today = getTodayDateString();
       const todayTasksAfterComplete = updatedTasks.filter(t => 
         t.dueDate === today || 
         (t.recurrence && isTaskDueToday(t))
