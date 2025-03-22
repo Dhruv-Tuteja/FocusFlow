@@ -490,20 +490,29 @@ const Index = () => {
       return;
     }
 
-    console.log('Creating new task:', task);
+    console.log('[CRITICAL ACTION] Creating new task:', task);
     
+    // Create new array with the task added
     const newTasks = [...tasks, task];
+    
+    // First update local state for faster UI response
     setTasks(newTasks);
     
     try {
+      // Then save to Firestore
+      console.log('[CRITICAL ACTION] Saving tasks to Firebase, count:', newTasks.length);
       const result = await saveTasks(user.uid, newTasks);
+      
       if (result.success) {
+        console.log('[CRITICAL ACTION] Task saved successfully');
         toast({
           title: "Success",
           description: "Task created successfully",
         });
       } else {
-        console.error('Failed to save task:', result.error);
+        console.error('[CRITICAL ERROR] Failed to save task:', result.error);
+        // Revert the local state change since the server update failed
+        setTasks(tasks);
         toast({
           title: "Error",
           description: "Failed to save task. Please try again.",
@@ -511,7 +520,9 @@ const Index = () => {
         });
       }
     } catch (error) {
-      console.error('Error saving task:', error);
+      console.error('[CRITICAL ERROR] Exception while saving task:', error);
+      // Revert the local state change
+      setTasks(tasks);
       toast({
         title: "Error",
         description: "An error occurred while saving the task",
@@ -530,19 +541,24 @@ const Index = () => {
       return;
     }
     
-    console.log('Updating task:', updatedTask);
+    console.log('[CRITICAL ACTION] Updating task:', updatedTask);
     
-    // Find the task to update
+    // Find the task to update and create a new array with the update applied
     const updatedTasks = tasks.map((task) =>
       task.id === updatedTask.id ? updatedTask : task
     );
     
+    // First update local state for faster UI response
     setTasks(updatedTasks);
     
     try {
+      // Then save to Firestore
+      console.log('[CRITICAL ACTION] Saving updated tasks to Firebase, count:', updatedTasks.length);
       const result = await saveTasks(user.uid, updatedTasks);
+      
       if (result.success) {
-        // Only show toast for status changes
+        console.log('[CRITICAL ACTION] Task updated successfully');
+        // Only show toast for status changes to completed
         if (updatedTask.status === "completed") {
           toast({
             title: "Success",
@@ -550,7 +566,9 @@ const Index = () => {
           });
         }
       } else {
-        console.error('Failed to update task:', result.error);
+        console.error('[CRITICAL ERROR] Failed to update task:', result.error);
+        // Revert the local state change since the server update failed
+        setTasks(tasks);
         toast({
           title: "Error",
           description: "Failed to update task. Please try again.",
@@ -558,7 +576,9 @@ const Index = () => {
         });
       }
     } catch (error) {
-      console.error('Error updating task:', error);
+      console.error('[CRITICAL ERROR] Exception while updating task:', error);
+      // Revert the local state change
+      setTasks(tasks);
       toast({
         title: "Error",
         description: "An error occurred while updating the task",
@@ -697,20 +717,29 @@ const Index = () => {
       return;
     }
     
-    console.log('Adding bookmark:', bookmark);
+    console.log('[CRITICAL ACTION] Adding bookmark:', bookmark);
     
+    // Create new array with the bookmark added
     const newBookmarks = [...bookmarks, bookmark];
+    
+    // First update local state for faster UI response
     setBookmarks(newBookmarks);
     
     try {
+      // Then save to Firestore
+      console.log('[CRITICAL ACTION] Saving bookmarks to Firebase, count:', newBookmarks.length);
       const result = await saveBookmarks(user.uid, newBookmarks);
+      
       if (result.success) {
+        console.log('[CRITICAL ACTION] Bookmark saved successfully');
         toast({
           title: "Success",
           description: "Bookmark added successfully",
         });
       } else {
-        console.error('Failed to save bookmark:', result.error);
+        console.error('[CRITICAL ERROR] Failed to save bookmark:', result.error);
+        // Revert the local state change since the server update failed
+        setBookmarks(bookmarks);
         toast({
           title: "Error",
           description: "Failed to save bookmark. Please try again.",
@@ -718,7 +747,9 @@ const Index = () => {
         });
       }
     } catch (error) {
-      console.error('Error saving bookmark:', error);
+      console.error('[CRITICAL ERROR] Exception while saving bookmark:', error);
+      // Revert the local state change
+      setBookmarks(bookmarks);
       toast({
         title: "Error",
         description: "An error occurred while saving the bookmark",
