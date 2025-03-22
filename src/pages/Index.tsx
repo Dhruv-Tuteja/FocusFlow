@@ -116,6 +116,9 @@ const Index = () => {
   const [todayTasks, setTodayTasks] = useState<Task[]>([]);
   const [todayCompleted, setTodayCompleted] = useState(0);
   const [todayProgress, setTodayProgress] = useState(0);
+  const [selectedDateProgress, setSelectedDateProgress] = useState(0);
+  const [selectedDateTasks, setSelectedDateTasks] = useState<Task[]>([]);
+  const [selectedDateCompleted, setSelectedDateCompleted] = useState(0);
 
   // Load user data when user changes
   useEffect(() => {
@@ -776,10 +779,38 @@ const Index = () => {
 
   const handleDateSelect = (date: string) => {
     setSelectedDate(date);
+    
+    // Find progress entry for the selected date
+    const dateProgress = progress.find(p => p.date === date);
+    
+    if (dateProgress) {
+      // Set selected date tasks and progress
+      setSelectedDateTasks(dateProgress.tasks || []);
+      setSelectedDateCompleted(dateProgress.tasksCompleted || 0);
+      setSelectedDateProgress(dateProgress.completion * 100 || 0);
+    } else {
+      // If no progress entry found, check if we have tasks for this date
+      const tasksForDate = tasks.filter(task => 
+        task.dueDate === date || 
+        (task.recurrence && task.dueDate <= date && isTaskDueToday(task))
+      );
+      
+      const completedTasks = tasksForDate.filter(task => task.status === "completed").length;
+      const completionPercentage = tasksForDate.length > 0 
+        ? (completedTasks / tasksForDate.length) * 100 
+        : 0;
+      
+      setSelectedDateTasks(tasksForDate);
+      setSelectedDateCompleted(completedTasks);
+      setSelectedDateProgress(completionPercentage);
+    }
   };
 
   const handleBackToToday = () => {
     setSelectedDate(null);
+    setSelectedDateTasks([]);
+    setSelectedDateCompleted(0);
+    setSelectedDateProgress(0);
   };
 
   const handleAddBookmark = async (bookmark: Bookmark) => {
@@ -838,6 +869,42 @@ const Index = () => {
       toast({
         title: "Error",
         description: "Failed to delete bookmark. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditBookmark = async (updatedBookmark: Bookmark) => {
+    if (!user) return;
+    
+    try {
+      console.log('Editing bookmark:', updatedBookmark.id);
+      const bookmarkIndex = bookmarks.findIndex(b => b.id === updatedBookmark.id);
+      
+      if (bookmarkIndex === -1) {
+        console.error('Bookmark not found:', updatedBookmark.id);
+        return;
+      }
+      
+      const updatedBookmarks = [...bookmarks];
+      updatedBookmarks[bookmarkIndex] = updatedBookmark;
+      
+      setBookmarks(updatedBookmarks);
+      
+      const result = await saveBookmarks(user.uid, updatedBookmarks);
+      if (!result.success) {
+        throw new Error('Failed to update bookmark');
+      }
+      
+      toast({
+        title: "Bookmark updated",
+        description: `"${updatedBookmark.title}" has been updated.`,
+      });
+    } catch (error) {
+      console.error('Error updating bookmark:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update bookmark. Please try again.",
         variant: "destructive",
       });
     }
@@ -939,39 +1006,50 @@ const Index = () => {
                 )}
               </div>
               
-        {/* Progress Card */}
+        {/* Progress Card - updated to show selected date or today's progress */}
         {user && (
-                  <Card className="animate-scale-in mb-6">
-                    <CardHeader className="pb-2">
-                      <div className="flex justify-between items-center">
-                        <CardTitle className="text-lg font-medium">Today's Progress</CardTitle>
-                        <div className="flex items-center gap-1">
-                          <span className="font-semibold">{Math.round(todayProgress)}%</span>
-                          <span className="text-sm text-muted-foreground">complete</span>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="bg-muted/50 rounded-full h-2 mb-1">
-                        <div 
-                          className="bg-primary rounded-full h-2 transition-all duration-700 ease-out"
-                          style={{ width: `${todayProgress}%` }}
-                        />
-                      </div>
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <div>
-                          {todayCompleted} of {todayTasks.length} tasks completed
-                        </div>
-                        {todayCompleted === todayTasks.length && todayTasks.length > 0 && (
-                          <div className="flex items-center gap-1 text-primary">
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            <span>All done for today!</span>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
+          <Card className="animate-scale-in mb-6">
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-center">
+                <CardTitle className="text-lg font-medium">
+                  {selectedDate 
+                    ? `Progress for ${new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` 
+                    : "Today's Progress"}
+                </CardTitle>
+                <div className="flex items-center gap-1">
+                  <span className="font-semibold">
+                    {Math.round(selectedDate ? selectedDateProgress : todayProgress)}%
+                  </span>
+                  <span className="text-sm text-muted-foreground">complete</span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="bg-muted/50 rounded-full h-2 mb-1">
+                <div 
+                  className="bg-primary rounded-full h-2 transition-all duration-700 ease-out"
+                  style={{ width: `${selectedDate ? selectedDateProgress : todayProgress}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <div>
+                  {selectedDate 
+                    ? `${selectedDateCompleted} of ${selectedDateTasks.length} tasks completed` 
+                    : `${todayCompleted} of ${todayTasks.length} tasks completed`}
+                </div>
+                {(selectedDate 
+                  ? (selectedDateCompleted === selectedDateTasks.length && selectedDateTasks.length > 0)
+                  : (todayCompleted === todayTasks.length && todayTasks.length > 0)
+                ) && (
+                  <div className="flex items-center gap-1 text-primary">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>All done{selectedDate ? " for this day" : " for today"}!</span>
+                  </div>
                 )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Three Column Layout */}
         <div className="grid grid-cols-10 gap-6">
@@ -1051,6 +1129,7 @@ const Index = () => {
             bookmarks={bookmarks}
             onAddBookmark={handleAddBookmark}
             onDeleteBookmark={handleDeleteBookmark}
+            onEditBookmark={handleEditBookmark}
           />
             ) : (
               <Card>
